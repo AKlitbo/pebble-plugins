@@ -1,0 +1,47 @@
+name: Release
+
+# name the run after the commit being released. left unset, GitHub only falls back to the commit
+# message when the tag sits on the branch tip, and shows the workflow name ("Release") for a tag
+# on any older commit, which tells you nothing about what shipped
+run-name: ${{ github.event.head_commit.message }}
+
+# plugins version independently, so a release is tagged per plugin as <plugin>-v<version>, such as
+# calendar-ical-v1.0.0. the plugin is the name in its appinfo. pushing that tag is the whole release process
+on:
+  push:
+    tags: ['*-v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # paf fills every unit's paf/ from the framework tag in its paf.config.json and installs its
+      # node_modules from the committed lock. the plugin is only known once the tag is read, so every unit
+      # is filled
+      - uses: AKlitbo/pebble-app-framework-cli/.github/actions/sync@v2.2.0
+
+      # every check that can stop a release runs here, before the SDK install and the build, so a
+      # mistyped tag or an undated changelog costs seconds
+      - name: Prepare Release
+        id: release
+        uses: AKlitbo/pebble-app-framework/.github/actions/prepare-release@v6.0.0
+
+      - uses: AKlitbo/pebble-app-framework/.github/actions/setup-pebble@v6.0.0
+        with:
+          face: ${{ steps.release.outputs.face }}
+
+      - name: Build Plugin
+        run: paf build ${{ steps.release.outputs.face }}
+
+      - name: Publish Release
+        uses: AKlitbo/pebble-app-framework/.github/actions/publish-release@v6.0.0
+        with:
+          face: ${{ steps.release.outputs.face }}
+          version: ${{ steps.release.outputs.version }}
+          title: ${{ steps.release.outputs.title }}
+          notes-file: ${{ steps.release.outputs.notes-file }}

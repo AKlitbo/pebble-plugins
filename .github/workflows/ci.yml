@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  # build each plugin app (bundles plugin.js and its settings page, runs pebble build).
+  # one job per plugin so a failing plugin does not block the others' artifacts. each plugin builds in
+  # its own paf unit under plugins/
+  # a plugin app runs on the phone and links no watch binary, so its build prints no memory report and
+  # this job runs no report-memory
+  pebble:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { plugin: calendar-ical, unit: plugins/calendar-ical }
+    steps:
+      - uses: actions/checkout@v7
+
+      # paf fills the unit's paf/ from the framework tag in its paf.config.json and installs its
+      # node_modules from the committed lock
+      - uses: AKlitbo/pebble-app-framework-cli/.github/actions/sync@v2.2.0
+        with:
+          face: ${{ matrix.plugin }}
+
+      - uses: AKlitbo/pebble-app-framework/.github/actions/setup-pebble@v6.0.0
+        with:
+          face: ${{ matrix.plugin }}
+
+      - name: Build Plugin
+        run: paf build ${{ matrix.plugin }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pbw-${{ matrix.plugin }}
+          path: |
+            ${{ matrix.unit }}/targets/${{ matrix.plugin }}*/build/*.pbw
+          if-no-files-found: error
+
+  # the checks run in every unit, each against its own framework
+  vitest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: AKlitbo/pebble-app-framework-cli/.github/actions/sync@v2.2.0
+      - run: paf test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: AKlitbo/pebble-app-framework-cli/.github/actions/sync@v2.2.0
+      - run: paf lint
+      # passes with one line for each unit until it turns Prettier on in its paf.config.json
+      - run: paf format --check
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: AKlitbo/pebble-app-framework-cli/.github/actions/sync@v2.2.0
+      - run: paf typecheck
+
+  # the generated files each plugin commits, such as its Clay components, still match what the
+  # framework's generators would write
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: AKlitbo/pebble-app-framework-cli/.github/actions/sync@v2.2.0
+      - run: paf check
