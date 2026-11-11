@@ -1,0 +1,33 @@
+{
+  "name": "calendar-ical",
+  "displayName": "Calendar + iCal",
+  "uuid": "c6b7d0a7-32b5-47f2-9839-becd04965da2",
+  "version": "1.0.0",
+  "sdkVersion": "3",
+  "projectType": "plugin",
+  "configPage": "config.html",
+  "usesPermissions": [
+    { "name": "Internet", "reason": "To fetch your iCal links", "required": false },
+    { "name": "Calendar", "reason": "To merge your phone's calendars with your iCal links", "required": false }
+  ],
+  "plugin": {
+    "description": "Your phone's calendars and up to two iCal links, merged into one agenda.",
+    "sources": [
+      {
+        "category": "calendar",
+        "items": ["event"],
+        "properties": {
+          "name": ["longText", "shortText"],
+          "location": ["longText", "shortText"],
+          "starts_at": ["shortText", "longText", "timestamp"],
+          "ends_at": ["shortText", "timestamp"],
+          "all_day": ["boolean"],
+          "calendar": ["longText", "shortText"]
+        },
+        "supportsMultiple": true,
+        "callerPermissions": ["Calendar"],
+        "suggestedRefreshIntervalSec": 300
+      }
+    ]
+  }
+}

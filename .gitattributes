@@ -1,0 +1,9 @@
+# keep line endings as LF, since the Pebble toolchain in WSL and Docker chokes on CRLF
+* text=auto eol=lf
+
+# binary assets
+*.png   binary
+*.ttf   binary
+*.woff  binary
+*.woff2 binary
+*.pbw   binary

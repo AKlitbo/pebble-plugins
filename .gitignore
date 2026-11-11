@@ -1,0 +1,19 @@
+# each plugin app under plugins/ ignores its own paf/, node_modules/, and targets/
+
+# Node
+node_modules/
+
+# test coverage from npm run test:coverage
+coverage/
+
+# editor and OS files
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# temporary files and local secrets
+.tmp
+.env
+.env.local

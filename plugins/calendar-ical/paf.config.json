@@ -1,0 +1,7 @@
+{
+  "plugins": {
+    "code-style": {}
+  },
+  "framework": "v6.0.0",
+  "commit": "63ea9a913c122ec3cd3097bf72a99292799c68a0"
+}
