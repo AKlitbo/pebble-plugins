@@ -1,15 +1,15 @@
 /**
  * The phone's events and both feeds' merged into one agenda.
  *
- * The agenda is today plus the next six days, soonest first, cut at 20 events. An event that shows up
- * in two places shows once. Two feeds share an event when it has the same UID and the same start. A
- * feed event is the phone's own when it has the same title, ignoring case and the spaces at its ends,
- * the same start, and the same all-day flag, and the phone's copy is the one kept.
+ * The agenda runs from today to the end of the Look Ahead, soonest first, cut at 20 events. An event
+ * that shows up in two places shows once. Two feeds share an event when it has the same UID and the
+ * same start. A feed event is the phone's own when it has the same title, ignoring case and the spaces
+ * at its ends, the same start, and the same all-day flag, and the phone's copy is the one kept.
  */
 
 import type { CalendarEvent } from '../../paf/ts/calendar/ical';
 import { horizonFor, upcomingWindow } from '../../paf/ts/calendar/window';
-import type { PhoneOffset } from '../../paf/ts/pkjs/phone-clock';
+import type { HorizonOptions } from '../../paf/ts/calendar/window';
 
 /** The most events the agenda serves. */
 export const MAX_EVENTS = 20;
@@ -59,10 +59,11 @@ function instanceIdOf(event: CalendarEvent): string {
  * @param phone The phone's events.
  * @param feeds Each feed's events, in the order they are checked against what is already kept.
  * @param nowSeconds The time now, as epoch seconds.
- * @param offsetAt Reads the phone's offset, passed only by a spec that stands the phone in another zone.
+ * @param lookAhead How many days the agenda holds, the week when left out, and the phone's offset
+ *   reader, which only a spec that stands the phone in another zone passes.
  * @return The agenda, soonest first, at most `MAX_EVENTS` long.
  */
-export function mergeAgenda(phone: CalendarEvent[], feeds: Array<{ source: EventSource; events: CalendarEvent[] }>, nowSeconds: number, offsetAt?: PhoneOffset): AgendaEntry[] {
+export function mergeAgenda(phone: CalendarEvent[], feeds: Array<{ source: EventSource; events: CalendarEvent[] }>, nowSeconds: number, lookAhead: HorizonOptions = {}): AgendaEntry[] {
   const sources = new Map<CalendarEvent, EventSource>(phone.map((event) => [event, 'phone']));
 
   for (const feed of feeds) {
@@ -75,7 +76,7 @@ export function mergeAgenda(phone: CalendarEvent[], feeds: Array<{ source: Event
     }
   }
 
-  const agenda = upcomingWindow([...sources.keys()], nowSeconds, horizonFor(nowSeconds, offsetAt)).slice(0, MAX_EVENTS);
+  const agenda = upcomingWindow([...sources.keys()], nowSeconds, horizonFor(nowSeconds, lookAhead)).slice(0, MAX_EVENTS);
   const taken = new Set<string>();
 
   return agenda.map((event) => {

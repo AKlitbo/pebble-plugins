@@ -97,6 +97,30 @@ describe('feedEvents', () => {
     expect([result, calls.length]).toEqual([['Retro'], 2]);
   });
 
+  /** A copy read for a week, served after the wearer picks a month, leaves the new weeks empty until the next refresh. */
+  test('fetches again when the Look Ahead changes', async () => {
+    const storage = fakeStorage();
+    const { calls, fetchLink } = fetches(calendarOf('Standup'), calendarOf('Retro'));
+
+    await feedEvents(FEED, 30, NOW_MS, fetchLink, storage, 7);
+
+    const result = (await feedEvents(FEED, 30, NOW_MS + MINUTE_MS, fetchLink, storage, 31)).map((event) => event.title);
+
+    expect([result, calls.length]).toEqual([['Retro'], 2]);
+  });
+
+  /** A copy saved before the Look Ahead existed was read for the week, so the first run after the update must serve it rather than fetch every feed at once. */
+  test('serves a copy with no Look Ahead as the week', async () => {
+    const storage = fakeStorage();
+    const { calls, fetchLink } = fetches(calendarOf('Standup'), calendarOf('Retro'));
+
+    await feedEvents(FEED, 30, NOW_MS, fetchLink, storage);
+
+    const result = (await feedEvents(FEED, 30, NOW_MS + MINUTE_MS, fetchLink, storage, 7)).map((event) => event.title);
+
+    expect([result, calls.length]).toEqual([['Standup'], 1]);
+  });
+
   /** A copy left behind a cleared link is what a locked keystore would serve, bringing back a calendar the wearer removed. */
   test('drops the copy when the link is cleared', async () => {
     const storage = fakeStorage();

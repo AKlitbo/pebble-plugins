@@ -12,7 +12,7 @@ import { eventInstance } from '../../paf/ts/plugin-app/calendar';
 import type { PluginPebble } from '../../paf/ts/plugin-app/runtime';
 import type { PhoneOffset } from '../../paf/ts/pkjs/phone-clock';
 import type { SourceInstance } from '../../paf/ts/plugin-sources/types';
-import { DEFAULTS, SETTINGS_OPTIONS } from '../settings';
+import { DEFAULTS, SETTINGS_OPTIONS, lookAheadDays } from '../settings';
 import { mergeAgenda } from './agenda';
 import { feedEvents } from './feeds';
 import type { Feed, FeedStorage, FetchText } from './feeds';
@@ -69,14 +69,16 @@ export async function agendaInstances(context: ServeContext, nowMs: number): Pro
   const { settings, linksRead } = await readAll(context);
   const nowSeconds = Math.floor(nowMs / 1000);
   const refreshMinutes = Number(settings.REFRESH) || Number(DEFAULTS.REFRESH);
+  // the feeds are walked to the same day the agenda stops on, or the two would end at different seconds
+  const days = lookAheadDays(settings.LOOK_AHEAD);
 
   const [phone, feed1, feed2] = await Promise.all([
     settings.PHONE_CALENDARS === true ? phoneEvents(pebble, nowSeconds, offsetAt) : Promise.resolve([]),
-    feedEvents(feedOf(settings, 1, linksRead), refreshMinutes, nowMs, fetchLink, storage),
-    feedEvents(feedOf(settings, 2, linksRead), refreshMinutes, nowMs, fetchLink, storage),
+    feedEvents(feedOf(settings, 1, linksRead), refreshMinutes, nowMs, fetchLink, storage, days),
+    feedEvents(feedOf(settings, 2, linksRead), refreshMinutes, nowMs, fetchLink, storage, days),
   ]);
 
-  const agenda = mergeAgenda(phone, [{ source: 'feed1', events: feed1 }, { source: 'feed2', events: feed2 }], nowSeconds, offsetAt);
+  const agenda = mergeAgenda(phone, [{ source: 'feed1', events: feed1 }, { source: 'feed2', events: feed2 }], nowSeconds, { days, offsetAt });
 
   return agenda.map(({ instanceId, event }) => eventInstance(event, instanceId, offsetAt));
 }

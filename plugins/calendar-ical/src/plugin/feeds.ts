@@ -35,6 +35,8 @@ export type FeedStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 interface FeedCopy {
   link: string;
   fetchedMs: number;
+  /** The Look Ahead it was read for. */
+  days?: number;
   events: CalendarEvent[];
 }
 
@@ -100,15 +102,17 @@ function readCopy(storage: FeedStorage, slot: 1 | 2): FeedCopy | null {
 /**
  * Whether a copy can still be served without a fetch.
  *
- * The reader only walks a feed up to the end of the agenda's week, so a copy from before midnight has
- * nothing for the day the week gained at midnight. A clock set back makes the copy look younger than
- * nothing, which is no reason to keep it either.
+ * The reader only walks a feed up to the end of the Look Ahead, so a copy from before midnight has
+ * nothing for the day the window gained at midnight, and a copy read for another Look Ahead stops
+ * on another day. A clock set back makes the copy look younger than nothing, which is no reason to
+ * keep it either.
  */
-function isFresh(copy: FeedCopy, refreshMinutes: number, nowMs: number): boolean {
+function isFresh(copy: FeedCopy, refreshMinutes: number, nowMs: number, days: number | undefined): boolean {
   const age = nowMs - copy.fetchedMs;
   const sameDay = phoneDayNumber(copy.fetchedMs / 1000) === phoneDayNumber(nowMs / 1000);
 
-  return sameDay && age >= 0 && age < refreshMinutes * 60 * 1000 - EARLY_RUN_MS;
+  // a copy saved before the Look Ahead existed, or a run with none set, was read for the week
+  return sameDay && (copy.days ?? 7) === (days ?? 7) && age >= 0 && age < refreshMinutes * 60 * 1000 - EARLY_RUN_MS;
 }
 
 /** A feed's events, each carrying the feed's name as its calendar. */
@@ -128,9 +132,11 @@ function named(events: CalendarEvent[], name: string): CalendarEvent[] {
  * @param nowMs The time now.
  * @param fetchLink Fetches a link's text, normally `fetchText`.
  * @param storage Where the copies are kept, normally `localStorage`.
+ * @param days How many days the agenda holds, today counted, as `parseIcal` takes them. Left out,
+ *   the week.
  * @return The feed's events, its last good copy when a fetch fails, and none for a feed that is off.
  */
-export async function feedEvents(feed: Feed, refreshMinutes: number, nowMs: number, fetchLink: FetchText, storage: FeedStorage): Promise<CalendarEvent[]> {
+export async function feedEvents(feed: Feed, refreshMinutes: number, nowMs: number, fetchLink: FetchText, storage: FeedStorage, days?: number): Promise<CalendarEvent[]> {
   const key = copyKey(feed.slot);
 
   if (!feed.on) {
@@ -158,14 +164,14 @@ export async function feedEvents(feed: Feed, refreshMinutes: number, nowMs: numb
     storage.removeItem(key);
   }
 
-  if (copy && isFresh(copy, refreshMinutes, nowMs)) {
+  if (copy && isFresh(copy, refreshMinutes, nowMs, days)) {
     return named(copy.events, feed.name);
   }
 
   let events: CalendarEvent[] | null = null;
 
   try {
-    events = ical.parseIcal(await fetchLink(cacheBust(link, nowMs)), Math.floor(nowMs / 1000));
+    events = ical.parseIcal(await fetchLink(cacheBust(link, nowMs)), Math.floor(nowMs / 1000), days);
   } catch (error) {
     console.log(`Calendar + iCal: feed ${feed.slot} could not be fetched, ${failureOf(error)}`);
   }
@@ -176,7 +182,7 @@ export async function feedEvents(feed: Feed, refreshMinutes: number, nowMs: numb
   }
 
   try {
-    storage.setItem(key, JSON.stringify({ link: stamp, fetchedMs: nowMs, events }));
+    storage.setItem(key, JSON.stringify({ link: stamp, fetchedMs: nowMs, days, events }));
   } catch (error) {
     console.log(`Calendar + iCal: feed ${feed.slot} could not be kept, ${error}`);
   }
