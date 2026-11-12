@@ -97,7 +97,7 @@ The iCal links go to `Pebble.secureStorage`, which the phone encrypts and only t
 
 ## Building
 
-The unit pins [Pebble App Framework](https://github.com/AKlitbo/pebble-app-framework) 6.1.0 in its `paf.config.json`, and needs `paf 2.2.0` or later.
+The unit pins [Pebble App Framework](https://github.com/AKlitbo/pebble-app-framework) 6.2.0 in its `paf.config.json`, and needs `paf 2.2.0` or later.
 
 ```sh
 paf sync
