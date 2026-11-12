@@ -10,6 +10,7 @@ Pebble app plugins built on the [Pebble App Framework](https://github.com/AKlitb
 | Plugin | What It Serves |
 | :-- | :-- |
 | [Calendar + iCal](plugins/calendar-ical/) | The phone's calendars and up to two iCal links, merged into one agenda, as the standard `calendar/event` source |
+| [Stocks + Crypto](plugins/stocks-crypto/) | Share and crypto prices from Yahoo, Finnhub, Twelve Data, or Alpha Vantage, as the standard `finance/stock` source, with the crypto alone as `finance/crypto` |
 
 ## Building Them Yourself
 
