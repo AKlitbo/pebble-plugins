@@ -40,6 +40,9 @@ export interface Stamps {
   lastAsOf: string;
 }
 
+// the answers that mean nothing reached the provider or came back, so a held run can say the same
+const LOST = ['NET ERROR', 'TIMEOUT'];
+
 /** One provider's record, as kept between runs. */
 export interface GateRecord extends Stamps {
   /** The fingerprint of the key the record belongs to, empty for a provider with no key. */
@@ -58,6 +61,12 @@ export interface GateRecord extends Stamps {
   stopAtMs: number;
   /** A fingerprint of the saved settings when the stop was set, so a save lifts it. */
   stopSettings: string;
+  /** A fingerprint of the saved settings and the key the last round ran with, so only a real change fetches past the gates. */
+  roundSettings: string;
+  /** How many rounds have sent one ticker first, so the next sends a different one. */
+  probes: number;
+  /** The status every call in the last round ended in when none reached an answer, such as NET ERROR, or empty. */
+  lostStatus: string;
 }
 
 /** Whether a provider can fetch this run, and if not, the status for a ticker with nothing kept. */
@@ -106,7 +115,7 @@ function readTickers(saved: unknown): Record<string, Stamps> {
  * @return The record.
  */
 export function loadGate(storage: GateStorage, provider: ProviderId, key: string): GateRecord {
-  const empty: GateRecord = { key, lastFetchMs: 0, lastAsOf: '', tickers: {}, retryAtMs: 0, backoffMs: 0, pending: [], stop: '', stopAtMs: 0, stopSettings: '' };
+  const empty: GateRecord = { key, lastFetchMs: 0, lastAsOf: '', tickers: {}, retryAtMs: 0, backoffMs: 0, pending: [], stop: '', stopAtMs: 0, stopSettings: '', roundSettings: '', probes: 0, lostStatus: '' };
 
   try {
     const saved = JSON.parse(storage.getItem(gateKey(provider)) || 'null');
@@ -123,6 +132,9 @@ export function loadGate(storage: GateStorage, provider: ProviderId, key: string
         stop: typeof saved.stop === 'string' ? saved.stop : '',
         stopAtMs: isTime(saved.stopAtMs) ? saved.stopAtMs : 0,
         stopSettings: typeof saved.stopSettings === 'string' ? saved.stopSettings : '',
+        roundSettings: typeof saved.roundSettings === 'string' ? saved.roundSettings : '',
+        probes: isTime(saved.probes) ? saved.probes : 0,
+        lostStatus: typeof saved.lostStatus === 'string' ? saved.lostStatus : '',
       };
     }
   } catch {
@@ -336,6 +348,9 @@ export function afterRound(record: GateRecord, provider: ProviderId, limits: Pro
   const retried = asked.filter((ticker) => record.pending.includes(ticker));
   const badKey = results.length > 0 && results.every((quote) => quote.status === 'INVALID KEY');
 
+  const lost = results.length > 0 && results.every((quote) => !quote.ok && LOST.includes(quote.status || ''));
+
+  record.lostStatus = lost ? results[0].status || '' : '';
   record.stop = badKey ? 'INVALID KEY' : '';
   record.stopAtMs = badKey ? nowMs : 0;
   record.stopSettings = badKey ? settings : '';

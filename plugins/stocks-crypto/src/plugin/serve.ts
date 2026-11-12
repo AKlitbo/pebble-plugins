@@ -22,7 +22,7 @@ import { stockInstance } from '../../paf/ts/plugin-app/stocks';
 import type { PluginPebble } from '../../paf/ts/plugin-app/runtime';
 import type { SourceInstance } from '../../paf/ts/plugin-sources/types';
 import { allowance, COUNTED, keepSent, keyPrint, loadLedger, saveLedger } from '../../paf/ts/stock/ledger';
-import { fetchQuotes, UNANSWERED } from '../../paf/ts/stock/quotes';
+import { fetchQuotes, PROBE_STOPS, UNANSWERED } from '../../paf/ts/stock/quotes';
 import schedule from '../../paf/ts/stock/schedule';
 import stockUtil from '../../paf/ts/stock/util';
 import type { RequestFn, StockOpts, StockQuote } from '../../paf/ts/stock/util';
@@ -157,29 +157,61 @@ async function fetchOne(context: ServeContext, provider: ProviderId, opts: Stock
  * plan its calls go out one after another. They stop starting once the run has used most of its time,
  * or once one is refused for the burst limit, since the next would be refused too. Each ticker it never
  * fetched answers ERR, so it keeps the copy's quote and is asked for again with the refused one.
+ *
+ * After a round that left a backoff, one ticker goes first and the rest only once it is answered. A
+ * first call lost to the network, timed out, or rate limited ends the round, and the others carry its
+ * status unspent, so a phone offline for hours spends one call a try rather than one a ticker. Alpha
+ * Vantage's free key asks for one ticker a run, so it never sends one first.
+ *
+ * @param lead The index of the ticker to send first, or -1 to send them all at once.
  */
-async function fetchRound(context: ServeContext, provider: ProviderId, key: string, asked: string[], spent: Spent): Promise<StockQuote[]> {
+async function fetchRound(context: ServeContext, provider: ProviderId, key: string, asked: string[], spent: Spent, lead: number): Promise<StockQuote[]> {
   const clock = context.clock || Date.now;
   const opts = { provider, key };
+  const start = clock();
+  const results: StockQuote[] = asked.map(() => stockUtil.status('ERR'));
 
-  if (provider !== 'alphavantage') {
-    return Promise.all(asked.map((symbol) => fetchOne(context, provider, opts, symbol, spent, clock)));
+  if (lead >= 0) {
+    const first = await fetchOne(context, provider, opts, asked[lead], spent, clock);
+
+    results[lead] = first;
+
+    if (!first.ok && PROBE_STOPS.includes(first.status || '')) {
+      asked.forEach((symbol, index) => {
+        if (index !== lead) {
+          results[index] = { ...stockUtil.status(first.status || 'ERR'), symbol, ...(first.limit ? { limit: first.limit } : {}) };
+        }
+      });
+      return results;
+    }
+
+    // a slow first answer leaves too little of the run for the rest, so they keep the copy's quote
+    // and go out on the next run
+    if (clock() - start > ONE_BY_ONE_MS) {
+      return results;
+    }
   }
 
-  const results: StockQuote[] = [];
-  const start = clock();
+  const rest = asked.map((_symbol, index) => index).filter((index) => index !== lead);
+
+  if (provider !== 'alphavantage') {
+    const fetched = await Promise.all(rest.map((index) => fetchOne(context, provider, opts, asked[index], spent, clock)));
+
+    rest.forEach((index, position) => (results[index] = fetched[position]));
+    return results;
+  }
+
   let burst = false;
 
-  for (const symbol of asked) {
+  for (const index of rest) {
     if (burst || clock() - start > ONE_BY_ONE_MS) {
-      results.push(stockUtil.status('ERR'));
       continue;
     }
 
-    const quote = await fetchOne(context, provider, opts, symbol, spent, clock);
+    const quote = await fetchOne(context, provider, opts, asked[index], spent, clock);
 
     burst = quote.status === 'RATE LIMIT' && quote.limit === 'second';
-    results.push(quote);
+    results[index] = quote;
   }
 
   return results;
@@ -194,7 +226,7 @@ async function fetchRound(context: ServeContext, provider: ProviderId, key: stri
  * kept quote or read RATE LIMIT until the room opens. A ticker the provider never answered, timed
  * out, or rate limited keeps its kept quote too.
  */
-async function priceWith(context: ServeContext, provider: Provider, key: string, limits: ProviderLimits, tickers: string[], force: boolean, retry: boolean, kept: Record<string, Entry>, settings: string, nowMs: number): Promise<Priced> {
+async function priceWith(context: ServeContext, provider: Provider, key: string, limits: ProviderLimits, tickers: string[], force: boolean, retry: boolean, kept: Record<string, Entry>, settings: string, nowMs: number, roundPrint: string): Promise<Priced> {
   const entries: Record<string, Entry> = {};
   const id = provider.id;
   const marked = (ticker: string, status: string): Entry => ({ quote: statusQuote(ticker, status), source: provider.label });
@@ -214,13 +246,23 @@ async function priceWith(context: ServeContext, provider: Provider, key: string,
   const counted = COUNTED.includes(id) && !limits.paid;
   const spent: Spent = { counted, print, sentMs: counted ? loadLedger(context.storage, id, print, nowMs) : [] };
   const record = loadGate(context.storage, id, print);
+
+  // a run with no copy reads as a save, and a round where nothing answered leaves no copy. a round
+  // already run with these settings and this key is not a save, so a phone offline from the start, or
+  // since a new key, waits out its backoff rather than fetching every ticker on every run
+  force = force && record.roundSettings !== roundPrint;
+
   const gate = gateFor(record, id, limits, force, spent.sentMs, settings, nowMs);
   let fetched = false;
   const waiting = (): Priced => ({ entries, retryAtMs: record.pending.length > 0 ? record.retryAtMs : 0, fetched });
 
   if (!gate.open) {
     // a key the provider turned away says so, rather than serving prices fetched with it
-    tickers.forEach((ticker) => (entries[ticker] = gate.status === 'INVALID KEY' ? marked(ticker, gate.status) : keptOr(ticker, gate.status || 'NO DATA')));
+    // a wait after a round nothing reached reads as that round did, so a phone offline from the start
+    // still says the provider could not be reached rather than RATE LIMIT
+    const held = gate.status === 'RATE LIMIT' && record.lostStatus ? record.lostStatus : gate.status;
+
+    tickers.forEach((ticker) => (entries[ticker] = gate.status === 'INVALID KEY' ? marked(ticker, gate.status) : keptOr(ticker, held || 'NO DATA')));
     return waiting();
   }
 
@@ -258,7 +300,12 @@ async function priceWith(context: ServeContext, provider: Provider, key: string,
     saveGate(context.storage, id, record);
   }
 
-  const results = await fetchRound(context, id, key, asked, spent);
+  // a save asks for every ticker, since the wearer just changed something. the ticker that goes first
+  // moves on each probing round, so one that keeps timing out cannot hold the rest back
+  const probe = counted && !force && record.backoffMs > 0 && asked.length > 1;
+  const results = await fetchRound(context, id, key, asked, spent, probe ? record.probes % asked.length : -1);
+
+  record.probes = probe ? record.probes + 1 : 0;
 
   // a round counts as a fetch only when a call reached the provider. one lost to the network spent
   // nothing, so the copy's time stays and the next run tries again rather than an interval later
@@ -267,6 +314,7 @@ async function priceWith(context: ServeContext, provider: Provider, key: string,
   const roomAtMs = leftOut.length > 0 ? allowance(id, keepSent(spent.sentMs, nowMs), leftOut.length, force, false, nowMs).retryAtMs : 0;
 
   afterRound(record, id, limits, asked, results, leftOut, roomAtMs, settings, nowMs);
+  record.roundSettings = roundPrint;
   saveGate(context.storage, id, record);
 
   asked.forEach((ticker, index) => {
@@ -392,7 +440,7 @@ export async function stockAnswer(context: ServeContext, nowMs: number, item: It
     [...groups.values()].map((group) => {
       const picked = group.provider === provider;
 
-      return priceWith(context, group.provider, picked ? key : '', picked ? limits : limitsFor(group.provider.id, false), group.tickers, changed, retry, keptEntries, saved, nowMs);
+      return priceWith(context, group.provider, picked ? key : '', picked ? limits : limitsFor(group.provider.id, false), group.tickers, changed, retry, keptEntries, saved, nowMs, `${id} ${saved}`);
     })
   );
   const entries: Record<string, Entry> = Object.assign({}, ...priced.map((part) => part.entries));

@@ -403,6 +403,88 @@ describe('the gates', () => {
     expect(result).toBe(1);
   });
 
+  /**
+   * A call whose answer was lost keeps its count, and every try asked for each ticker, so a watchlist
+   * of four on a phone offline for hours spent a free day four calls at a time. After a round that
+   * left a backoff, one ticker goes first and its loss ends the try.
+   */
+  test('asks for one ticker a try while a phone with four tickers is offline', async () => {
+    const phone = fakePhone({ PROVIDER: 'twelvedata', WATCHLIST: watch('AAPL, MSFT, NVDA, AMZN') }, { TWELVEDATA_KEY: 'key' });
+
+    phone.replies['api.twelvedata.com'] = { error: 'fetch failed' };
+
+    await runEvery5(phone, NOON, NOON + 60 * MINUTE_MS);
+    const result = sentOf(phone, 'twelvedata', 'key').length;
+
+    // four in the first round, then one at the 15 and 45 minute tries
+    expect(result).toBe(6);
+  });
+
+  /** A first ticker answered after an outage has to bring the rest in the same run, or they wait out the floor. */
+  test('asks for the other tickers once the first is answered after an outage', async () => {
+    const phone = fakePhone({ PROVIDER: 'twelvedata', WATCHLIST: watch('AAPL, MSFT, NVDA, AMZN') }, { TWELVEDATA_KEY: 'key' });
+
+    phone.replies['api.twelvedata.com'] = { error: 'fetch failed' };
+    await run(phone, NOON);
+    delete phone.replies['api.twelvedata.com'];
+
+    const answer = await run(phone, NOON + 16 * MINUTE_MS);
+
+    expect([shown(answer), sentOf(phone, 'twelvedata', 'key').length]).toEqual([['AAPL $100.00 Twelve Data', 'MSFT $100.00 Twelve Data', 'NVDA $100.00 Twelve Data', 'AMZN $100.00 Twelve Data'], 8]);
+  });
+
+  /** A ticker that keeps timing out on its own would hold the rest back for good if it always went first, so each try sends a different one first. */
+  test('sends a different ticker first on each try while offline', async () => {
+    const phone = fakePhone({ PROVIDER: 'twelvedata', WATCHLIST: watch('AAPL, MSFT, NVDA, AMZN') }, { TWELVEDATA_KEY: 'key' });
+
+    phone.replies['api.twelvedata.com'] = { error: 'fetch failed' };
+
+    // eight hours, so the tries reach the two hour wait
+    await runEvery5(phone, NOON, NOON + 8 * 60 * MINUTE_MS);
+    const firsts = phone.calls.slice(4).map((call) => call.symbol);
+    const result = firsts.some((symbol, index) => index > 0 && symbol === firsts[index - 1]);
+
+    expect(result).toBe(false);
+  });
+
+  /** A phone offline since setup had no copy, and showing RATE LIMIT on every ticker would send the wearer after their plan rather than their connection. */
+  test('answers the runtime error on a held run after a round nothing reached', async () => {
+    const phone = fakePhone({ PROVIDER: 'twelvedata', WATCHLIST: watch('AAPL, MSFT') }, { TWELVEDATA_KEY: 'key' });
+
+    phone.replies['api.twelvedata.com'] = { error: 'fetch failed' };
+    await run(phone, NOON).catch(() => undefined);
+
+    const answer = await run(phone, NOON + 5 * MINUTE_MS);
+
+    expect([answer, phone.calls.length]).toEqual(['PLUGIN_UNAVAILABLE', 2]);
+  });
+
+  /** The crypto pairs share Yahoo's record whatever the stock key, so a new key has to fetch them again, or they read NO DATA for a whole interval. */
+  test('fetches the crypto pairs again straight after a new key', async () => {
+    const phone = fakePhone({ PROVIDER: 'twelvedata', WATCHLIST: watch('AAPL', 'BTC-USD') }, { TWELVEDATA_KEY: 'key' });
+
+    await run(phone, NOON);
+    phone.secrets.TWELVEDATA_KEY = 'new-key';
+
+    const answer = await run(phone, NOON + 10 * 1000);
+
+    expect(shown(answer)).toEqual(['AAPL $100.00 Twelve Data', 'BTC-USD $100.00 Yahoo']);
+  });
+
+  /** Only a round already run with the same settings holds a run back, so a save during an outage still asks for every ticker straight away. */
+  test('asks for every ticker after a save during an outage', async () => {
+    const phone = fakePhone({ PROVIDER: 'twelvedata', WATCHLIST: watch('AAPL, MSFT') }, { TWELVEDATA_KEY: 'key' });
+
+    phone.replies['api.twelvedata.com'] = { error: 'fetch failed' };
+    await run(phone, NOON);
+    save(phone, { WATCHLIST: watch('AAPL, MSFT, NVDA') });
+
+    await run(phone, NOON + 5 * MINUTE_MS).catch(() => undefined);
+    const result = sentOf(phone, 'twelvedata', 'key').length;
+
+    expect(result).toBe(5);
+  });
+
   /** A timed out call may have landed and been counted, so it keeps its count, and the slot keeps the last good price. */
   test('keeps the count and the last good price for a call that timed out', async () => {
     const phone = fakePhone({ PROVIDER: 'twelvedata', WATCHLIST: watch('AAPL') }, { TWELVEDATA_KEY: 'key' });
