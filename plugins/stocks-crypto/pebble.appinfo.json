@@ -26,7 +26,7 @@
           "day_change_percent": ["shortText", "longText", "numericValue"],
           "currency": ["shortText"],
           "updated": ["timestamp", "shortText"],
-          "source": ["shortText"],
+          "source": ["shortText", "longText"],
           "market": ["shortText"],
           "status": ["shortText"]
         },

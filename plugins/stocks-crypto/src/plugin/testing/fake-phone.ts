@@ -132,7 +132,7 @@ export async function run(phone: FakePhone, nowMs: number, onAnswer: () => void 
   return answers[0];
 }
 
-/** What a face would show for each served ticker: its id, its price or status, and its source. */
+/** What a face would show for each served ticker: its id, its price or status, and the full name of its source. */
 export function shown(answer: Answered): string[] {
   if (typeof answer === 'string') {
     return [answer];
@@ -142,6 +142,6 @@ export function shown(answer: Answered): string[] {
     const properties = instance.properties || {};
     const value = properties.price?.shortText?.text ?? properties.status?.shortText?.text;
 
-    return `${instance.instanceId} ${value} ${properties.source?.shortText?.text}`;
+    return `${instance.instanceId} ${value} ${properties.source?.longText?.text}`;
   });
 }
