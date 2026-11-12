@@ -95,20 +95,39 @@ export const REFRESH_MINUTES = ['15', '30', '60', '120'];
 /** The value a unit reads while it follows the Pebble app. */
 export const APP_UNIT = 'app';
 
-/** Each unit's choices, the Pebble app's own first. */
+/** What the page calls that choice, with the Pebble app's own unit after it once the plugin says what that is. */
+export const APP_UNIT_LABEL = 'Pebble App';
+
+/** The message the settings page sends the plugin for the Pebble app's units. */
+export const UNITS_MESSAGE = 'weather-enhanced-units';
+
+/** Each unit row, against the name its unit goes by in the framework's weather units. */
+export const UNIT_ROWS = { TEMPERATURE_UNIT: 'temperature', WIND_UNIT: 'windSpeed', PRESSURE_UNIT: 'pressure' } as const;
+
+/** Each unit's choices past the Pebble app's own, saved under the names the framework's weather source serves them in. */
 export const UNIT_CHOICES = {
   TEMPERATURE_UNIT: [
-    { label: 'Celsius (°C)', value: 'c' },
-    { label: 'Fahrenheit (°F)', value: 'f' },
+    { label: 'Celsius (°C)', value: '°C' },
+    { label: 'Fahrenheit (°F)', value: '°F' },
   ],
   WIND_UNIT: [
-    { label: 'Kilometres/hour (km/h)', value: 'kmh' },
+    { label: 'Kilometres/hour (km/h)', value: 'km/h' },
     { label: 'Miles/hour (mph)', value: 'mph' },
     { label: 'Knots (kts)', value: 'knots' },
-    { label: 'Metres/second (m/s)', value: 'ms' },
+    { label: 'Metres/second (m/s)', value: 'm/s' },
   ],
   PRESSURE_UNIT: [
-    { label: 'Hectopascals (hPa)', value: 'hpa' },
-    { label: 'Inches of Mercury (inHg)', value: 'inhg' },
+    { label: 'Hectopascals (hPa)', value: 'hPa' },
+    { label: 'Inches of Mercury (inHg)', value: 'inHg' },
   ],
 };
+
+/**
+ * The provider the settings pick, falling back to Open-Meteo for a value the page never offered.
+ *
+ * @param saved The saved Data Source.
+ * @return The provider.
+ */
+export function providerOf(saved: unknown): Provider {
+  return PROVIDERS.find((provider) => provider.id === saved) || OPEN_METEO;
+}
