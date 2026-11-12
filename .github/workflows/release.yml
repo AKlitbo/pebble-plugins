@@ -31,6 +31,14 @@ jobs:
         id: release
         uses: AKlitbo/pebble-app-framework/.github/actions/prepare-release@v6.0.0
 
+      # the same checks CI runs, in every unit, so a tag on a commit CI skipped still ships tested. CI
+      # passes over a push that changes only markdown, such as the one that dates a changelog
+      - name: Check
+        run: |
+          paf test
+          paf lint
+          paf typecheck
+
       - uses: AKlitbo/pebble-app-framework/.github/actions/setup-pebble@v6.0.0
         with:
           face: ${{ steps.release.outputs.face }}
