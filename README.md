@@ -10,6 +10,7 @@ A plugin runs in the Pebble app on your phone and serves its data to every watch
 | :-- | :-- | :-- | :-- |
 | [Calendar + iCal](plugins/calendar-ical/) | The phone's calendars and up to two iCal links, merged into one agenda. | `calendar/event` | Nothing for the phone's calendars, and an iCal link for each feed. |
 | [Stocks + Crypto](plugins/stocks-crypto/) | Stock and crypto prices from Yahoo, Finnhub, Twelve Data, or Alpha Vantage, in the order you set. | `finance/stock` and `finance/crypto` | Nothing for Yahoo, and your own key for the others. |
+| [Weather Enhanced](plugins/weather-enhanced/) | The weather for the places in the Pebble app's weather list, from Open-Meteo, OpenWeatherMap, or WeatherAPI.com, kept inside each provider's plan. | `weather/location` | Nothing for Open-Meteo, and your own key for the others. |
 
 Each plugin's own page covers its settings, its permissions, what it serves, and how to build it.
 
@@ -23,7 +24,7 @@ Each plugin's own page covers its settings, its permissions, what it serves, and
 
 ## Privacy
 
-Everything a plugin keeps stays on your phone. Private links and API keys go to the phone's encrypted storage, which only that plugin can read. A plugin asks for each permission it needs, such as Internet for one provider's site, and none is required, so you allow only what you use.
+Everything a plugin keeps stays on your phone. Private links and API keys go to the phone's encrypted storage, which only that plugin can read. A plugin asks for each permission it needs, such as Internet for one provider's site, and requires only the ones it cannot work without, so you allow only what you use.
 
 ## Licence
 
