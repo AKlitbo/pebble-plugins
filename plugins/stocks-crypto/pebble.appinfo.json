@@ -1,0 +1,38 @@
+{
+  "name": "stocks-crypto",
+  "displayName": "Stocks + Crypto",
+  "uuid": "77e6eeb3-340a-46f8-ba39-5e2000b6fce3",
+  "version": "1.0.0",
+  "sdkVersion": "3",
+  "projectType": "plugin",
+  "configPage": "config.html",
+  "usesPermissions": [
+    { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] }, "reason": "To get share prices from Yahoo, and crypto prices whichever provider you pick", "required": false },
+    { "name": "Internet", "parameters": { "domains": ["finnhub.io"] }, "reason": "To get share prices from Finnhub, when you pick it", "required": false },
+    { "name": "Internet", "parameters": { "domains": ["api.twelvedata.com"] }, "reason": "To get share prices from Twelve Data, when you pick it", "required": false },
+    { "name": "Internet", "parameters": { "domains": ["www.alphavantage.co"] }, "reason": "To get share prices from Alpha Vantage, when you pick it", "required": false }
+  ],
+  "plugin": {
+    "description": "Stocks and crypto on your watch, from Yahoo, or your own Finnhub, Twelve Data, or Alpha Vantage key. Every watchface that reads stock plugins can show them.",
+    "sources": [
+      {
+        "category": "finance",
+        "items": ["stock", "crypto"],
+        "properties": {
+          "ticker": ["shortText"],
+          "name": ["shortText"],
+          "price": ["shortText", "longText", "numericValue"],
+          "day_change": ["shortText", "longText", "numericValue"],
+          "day_change_percent": ["shortText", "longText", "numericValue"],
+          "currency": ["shortText"],
+          "updated": ["timestamp", "shortText"],
+          "source": ["shortText"],
+          "market": ["shortText"],
+          "status": ["shortText"]
+        },
+        "supportsMultiple": true,
+        "suggestedRefreshIntervalSec": 300
+      }
+    ]
+  }
+}
