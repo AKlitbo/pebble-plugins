@@ -2,7 +2,7 @@
   "name": "calendar-ical",
   "displayName": "Calendar + iCal",
   "uuid": "c6b7d0a7-32b5-47f2-9839-becd04965da2",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "sdkVersion": "3",
   "projectType": "plugin",
   "configPage": "config.html",
