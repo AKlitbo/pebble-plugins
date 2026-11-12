@@ -14,6 +14,8 @@ A plugin runs in the Pebble app on your phone and serves its data to every watch
 
 Each plugin's own page covers its settings, its permissions, what it serves, and how to build it.
 
+The [test watchfaces](watchfaces/) each read one kind of data from a plugin and log everything that arrives, for testing a plugin from a watch.
+
 ## Getting Started
 
 1. **Turn Plugins On.** Plugins are still a Core Devices preview in the Pebble app. In the Pebble app, go to Settings, Plugins, and turn on Plugins / permissions preview.
