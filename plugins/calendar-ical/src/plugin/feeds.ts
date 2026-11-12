@@ -42,9 +42,6 @@ interface FeedCopy {
 // a copy this close to the Refresh Interval counts as due, or a 5 minute interval would fetch every other run
 const EARLY_RUN_MS = 60 * 1000;
 
-// a run has 20 seconds, and the phone's calendars are read alongside the feeds
-const FETCH_TIMEOUT_MS = 8 * 1000;
-
 /**
  * Where a feed's copy is kept in `localStorage`.
  *
@@ -53,26 +50,6 @@ const FETCH_TIMEOUT_MS = 8 * 1000;
  */
 export function copyKey(slot: 1 | 2): string {
   return `calendar-ical-feed-${slot}`;
-}
-
-/**
- * Fetches a link with the plugin runtime's `fetch`.
- *
- * The runtime has no timers, so a host that never answers is only cut off where the runtime offers
- * `AbortSignal.timeout`. Without it a hung fetch runs until the Pebble app ends the run.
- *
- * @param url The link.
- * @return The body, or a rejection for a failed fetch or an answer other than 2xx.
- */
-export async function fetchText(url: string): Promise<string> {
-  const timeout = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(FETCH_TIMEOUT_MS) : undefined;
-  const response = await fetch(url, timeout ? { signal: timeout } : undefined);
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  return response.text();
 }
 
 /**

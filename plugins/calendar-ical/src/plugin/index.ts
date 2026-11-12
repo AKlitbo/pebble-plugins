@@ -8,7 +8,7 @@
 import { pluginPebble } from '../../paf/ts/plugin-app/runtime';
 import { handleSettings } from '../../paf/ts/plugin-app/settings';
 import { SETTINGS_OPTIONS } from '../settings';
-import { fetchText } from './feeds';
+import { fetchText } from '../../paf/ts/plugin-app/request';
 import { handleSource } from './serve';
 
 const pebble = pluginPebble();
