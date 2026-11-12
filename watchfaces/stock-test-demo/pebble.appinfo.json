@@ -1,0 +1,21 @@
+{
+  "name": "stock-test-demo",
+  "displayName": "Stock Test Demo",
+  "version": "0.2.0",
+  "watchface": true,
+  "uuid": "699334aa-8dec-40e6-b960-7bb46db57170",
+  "sdkVersion": "3",
+  "enableMultiJS": true,
+  "targetPlatforms": ["emery", "gabbro"],
+  "capabilities": ["configurable"],
+  "defines": {
+    "PLUGIN_STOCKS": 1
+  },
+  "providers": {
+    "stocks": ["plugin"]
+  },
+  "messageKeys": ["TEST_PLUGIN", "TEST_ERROR", "TEST_TICKERS"],
+  "resources": {
+    "media": []
+  }
+}
