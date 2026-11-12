@@ -1,0 +1,21 @@
+{
+  "name": "calendar-test-demo",
+  "displayName": "Calendar Test Demo",
+  "version": "0.1.0",
+  "watchface": true,
+  "uuid": "49e96d22-9380-4d60-bb5e-97e5ede2d666",
+  "sdkVersion": "3",
+  "enableMultiJS": true,
+  "targetPlatforms": ["emery", "gabbro"],
+  "capabilities": ["configurable"],
+  "defines": {
+    "PLUGIN_CALENDAR": 1
+  },
+  "providers": {
+    "calendar": ["plugin"]
+  },
+  "messageKeys": ["TEST_PLUGIN", "TEST_ERROR", "TEST_CALENDARS"],
+  "resources": {
+    "media": []
+  }
+}
