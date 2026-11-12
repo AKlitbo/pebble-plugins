@@ -18,11 +18,9 @@ Every watchface that reads weather plugins reads Weather Enhanced with no change
 
 1. **Turn Plugins On.** In the Pebble app, go to Settings, Plugins, and turn on Plugins / permissions preview.
 2. **Install Weather Enhanced** from the Pebble app store.
-3. **Make It the Weather Source.** Under Preferred Sources in the Pebble app's plugin settings, pick Weather Enhanced for Weather. With no other weather plugin installed, the Pebble app uses it on its own. A face that names the built-in Weather plugin itself keeps reading the built-in.
+3. **Make It the Weather Provider.** In the Pebble app, go to Settings, Weather, and pick Weather Enhanced as the Weather provider. Weather under Preferred Sources in the plugin settings is the same choice, so either place sets it. It feeds the watch's own Weather app and timeline, and every face that reads the weather. A face that names the built-in Weather plugin itself keeps reading the built-in.
 4. **Add Your Places** to the Pebble app's weather list. Weather Enhanced fetches the places on that list and nowhere else.
 5. **Pick a Watchface** that shows weather.
-
-TODO: whether Settings, Weather in the Pebble app and the Preferred Sources choice for `weather/location` are one setting or two. Step 3 changes to match once the first build shows it.
 
 ## Configuration
 
@@ -35,7 +33,7 @@ Open Weather Enhanced's settings in the Pebble app.
 | Paid Plan | One per keyed provider, off by default. Turn it on if your key is on a paid plan, and the plugin stops holding it to the free plan's limits. |
 | Places to Fetch | The first place in the Pebble app's weather list, or all of them up to five, which is the default. |
 | Refresh Interval | How old a place's reading can get before the next run fetches it again: 15, 30, 60, or 120 minutes, 30 by default. It is a ceiling rather than a schedule, since the Pebble app decides when the plugin runs. While your provider cannot answer, its last reading can stand in for up to three intervals, as How It Works covers. |
-| Units | Shows the units the Pebble app is set to, which the plugin follows by default. Each unit can be overridden here. |
+| Units | Shows the units the Pebble app is set to, which the plugin follows by default. Each unit can be overridden here. An override reaches watchfaces, while the watch's own Weather app keeps the Pebble app's units. |
 
 **The Watch's Weather App.** The page says that picking Weather Enhanced as the preferred weather source also makes it the source for the watch's own Weather app and the timeline's weather pins.
 
@@ -141,7 +139,7 @@ The plugin always sends every current reading but the coordinates, and sends onl
 
 The plugin has no timers, and the Pebble app stops each run after 20 seconds. Each run starts cold, so everything below lives in `localStorage`.
 
-TODO: how often the Pebble app runs the plugin with a face and its own weather fetch both subscribed. Count the runs over an hour in the logs during the first build, then say it here as the other plugins do.
+The Pebble app runs it every 15 minutes for each reader, and the watch's own Weather app counts as one, so a face and the Weather app together make about eight runs an hour. It also runs when a reader starts, and when the Pebble app's weather list changes.
 
 * **The Places.** Each run reads the Pebble app's weather list, in your order, and takes the first place or up to five, as Places to Fetch says. The current location carries the coordinates of the Pebble app's last fix. When it has none, the plugin skips it for that run.
 * **The Copy.** Each place keeps a copy of its last reading. A run answers from the copy until it reaches the Refresh Interval, then fetches that place again and keeps the result. A place whose fetch failed waits out the Refresh Interval too, so a provider that is down is asked once an interval rather than on every run.
@@ -149,9 +147,7 @@ TODO: how often the Pebble app runs the plugin with a face and its own weather f
 * **The Limits.** The framework's ledger counts every call against each provider's plan, Open-Meteo's included, and says how many more fit. Open-Meteo counts a request asking for many readings as several calls, so the ledger counts each call by that weight. A provider that answers `RATE LIMIT` anyway is left alone until its shortest limit opens again, a minute for Open-Meteo and OpenWeatherMap, and never longer than an hour. WeatherAPI.com is held until the 1st of the month only when it says the month's calls are spent, and for an hour after any other rate limit. A key on Paid Plan is left alone for a minute, and turning Paid Plan on or off lifts the hold. A provider that answers `INVALID KEY` is left alone until you save the settings, or for a day.
 * **The Fallback.** When your provider cannot answer, the last reading it gave for a place is served while it is under three Refresh Intervals old. Past that the plugin serves the Open-Meteo reading fetched beside your provider's for the forecast, and `source` says so. An Open-Meteo reading kept from an earlier fallback is only served while it is fresh, so a newer one always wins. Only when there is none, such as while your provider is held, does it ask Open-Meteo on its own, and only while the run has time left. A run whose Open-Meteo half already failed does not ask it again.
 * **When Nothing Works.** A place without today's and tomorrow's forecast is left out, and the Pebble app fills it from its own servers. If no place can be served, the plugin answers `PLUGIN_UNAVAILABLE` rather than sending half a reading, and the Pebble app fills every place.
-* **Units.** The plugin reads your units from the Pebble app's settings, unless you override one on the settings page.
-
-TODO: whether the watch's own Weather app follows the units the plugin sends, or assumes the Pebble app's setting. If it assumes, the Units row in Configuration gets a note saying an override only reaches watchfaces.
+* **Units.** The plugin reads your units from the Pebble app's settings, unless you override one on the settings page. The watch's own Weather app reads each value with its unit and shows it in the Pebble app's units, so an override only reaches watchfaces.
 
 ### The Watch's Weather App
 
@@ -178,7 +174,7 @@ The API keys go to `Pebble.secureStorage`, which the phone encrypts and only the
 
 ## Credits
 
-- Weather data by [Open-Meteo](https://open-meteo.com), under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). TODO: confirm Open-Meteo's exact credit wording from its licence page.
+- Weather data by [Open-Meteo](https://open-meteo.com), under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - Weather data © [OpenWeather](https://openweathermap.org).
 - Powered by [WeatherAPI.com](https://www.weatherapi.com).
 
@@ -209,8 +205,6 @@ The API keys go to `Pebble.secureStorage`, which the phone encrypts and only the
 ## Building
 
 The unit pins [Pebble App Framework](https://github.com/AKlitbo/pebble-app-framework) 6.2.0 in its `paf.config.json`, and needs `paf 2.2.0` or later.
-
-TODO: the pin moves from 6.1.0 to 6.2.0 once the framework releases it.
 
 ```sh
 paf sync

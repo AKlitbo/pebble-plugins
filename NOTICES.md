@@ -24,7 +24,7 @@ The forecast for every provider, and the current weather while Open-Meteo is pic
 
 - **Source:** <https://open-meteo.com>
 - **Licence:** Creative Commons Attribution 4.0 International, published at <https://creativecommons.org/licenses/by/4.0/>
-- **Credit:** Weather data by Open-Meteo.com under CC BY 4.0. TODO: confirm Open-Meteo's exact credit wording from its licence page
+- **Credit:** Weather data by Open-Meteo.com under CC BY 4.0.
 
 ### OpenWeatherMap
 
