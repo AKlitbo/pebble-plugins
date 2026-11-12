@@ -1,29 +1,29 @@
 # Pebble Plugins
 
-Pebble app plugins built on the [Pebble App Framework](https://github.com/AKlitbo/pebble-app-framework). A plugin runs in the Pebble app on the phone and serves data to every watchface that reads its kind of data, not only ours.
+Pebble app plugins built on the [Pebble App Framework](https://github.com/AKlitbo/pebble-app-framework).
 
-> [!NOTE]
-> Plugins are still a Core Devices preview in the Pebble app. A wearer turns them on under Settings, Plugins, Plugins / permissions preview, and they publish to the [Pebble appstore](https://apps.repebble.com/plugins) like any other app. Each release here also attaches the plugin's `.pbw`.
+A plugin runs in the Pebble app on your phone and serves its data to every watchface that reads that kind of data, whoever made it. Each one serves a standard source in the shapes the Pebble app's own plugins use, so a watchface written for those reads these with no change.
 
 ## Plugins
 
-| Plugin | What It Serves |
-| :-- | :-- |
-| [Calendar + iCal](plugins/calendar-ical/) | The phone's calendars and up to two iCal links, merged into one agenda, as the standard `calendar/event` source |
-| [Stocks + Crypto](plugins/stocks-crypto/) | Share and crypto prices from Yahoo, Finnhub, Twelve Data, or Alpha Vantage, as the standard `finance/stock` source, with the crypto alone as `finance/crypto` |
+| Plugin | What It Serves | Source | Needs |
+| :-- | :-- | :-- | :-- |
+| [Calendar + iCal](plugins/calendar-ical/) | The phone's calendars and up to two iCal links, merged into one agenda. | `calendar/event` | Nothing for the phone's calendars, and an iCal link for each feed. |
+| [Stocks + Crypto](plugins/stocks-crypto/) | Stock and crypto prices from Yahoo, Finnhub, Twelve Data, or Alpha Vantage, in the order you set. | `finance/stock` and `finance/crypto` | Nothing for Yahoo, and your own key for the others. |
 
-## Building Them Yourself
+Each plugin's own page covers its settings, its permissions, what it serves, and how to build it.
 
-Each plugin is a unit of its own under `plugins/`, with a `paf.config.json` that pins it to a framework tag, the way a face in [pebble-watchfaces](https://github.com/AKlitbo/pebble-watchfaces) is. [paf](https://github.com/AKlitbo/pebble-app-framework-cli) fills each unit's `paf/` and builds it in place. Plugin apps need framework 6 and `paf 2.2.0` or later.
+## Getting Started
 
-```sh
-paf sync
-paf build calendar-ical  # from WSL, with Pebble SDK 4.44 and pebble-tool 5.1.2 or later
-paf test
-paf lint
-paf typecheck
-paf check
-```
+1. **Turn Plugins On.** Plugins are still a Core Devices preview in the Pebble app. In the Pebble app, go to Settings, Plugins, and turn on Plugins / permissions preview.
+2. **Install a Plugin** from the [Pebble appstore](https://apps.repebble.com/plugins). Each release here also attaches the plugin's `.pbw`.
+3. **Pick It as the Source.** When more than one installed plugin serves the same thing, pick ours under Preferred Sources in the Pebble app's plugin settings. With only one, the Pebble app uses it on its own.
+4. **Set It Up** in its settings in the Pebble app.
+5. **Pick a Watchface** that reads that kind of data.
+
+## Privacy
+
+Everything a plugin keeps stays on your phone. Private links and API keys go to the phone's encrypted storage, which only that plugin can read. A plugin asks for each permission it needs, such as Internet for one provider's site, and none is required, so you allow only what you use.
 
 ## Licence
 
