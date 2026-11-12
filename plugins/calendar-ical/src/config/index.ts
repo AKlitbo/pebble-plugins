@@ -4,7 +4,10 @@
  */
 
 import type { ClayConfigItem } from '../../paf/ts/clay/types';
-import { DEFAULTS, REFRESH_MINUTES } from '../settings';
+import { DEFAULTS, LOOK_AHEAD_DAYS, REFRESH_MINUTES } from '../settings';
+
+/** How the Look Ahead select names each of its day counts. */
+const LOOK_AHEAD_LABELS: Record<string, string> = { 1: 'Today', 3: '3 Days', 7: '1 Week', 14: '2 Weeks', 31: '1 Month' };
 
 /** One iCal feed's section, with its name and link shown only while the feed is on. */
 function feedSection(slot: 1 | 2): ClayConfigItem {
@@ -40,6 +43,16 @@ export const clayConfig: ClayConfigItem[] = [
   {
     type: 'section',
     items: [
+      {
+        type: 'select',
+        messageKey: 'LOOK_AHEAD',
+        label: 'Look Ahead',
+        defaultValue: DEFAULTS.LOOK_AHEAD,
+        options: LOOK_AHEAD_DAYS.map((days) => ({ label: LOOK_AHEAD_LABELS[days], value: days })),
+      },
+      // the built-in Calendar plugin shares only the next 7 days of the phone's calendars
+      // so the note shows for the choices longer than that, while the phone's calendars are shown
+      { type: 'text', defaultValue: "Phone calendars only reach a week ahead, since that's all the Pebble app shares. Your iCal feeds use the full Look Ahead.", visibleWhen: [{ key: 'LOOK_AHEAD', in: LOOK_AHEAD_DAYS.filter((days) => Number(days) > 7) }, { key: 'PHONE_CALENDARS', in: [true] }] },
       {
         type: 'select',
         messageKey: 'REFRESH',
