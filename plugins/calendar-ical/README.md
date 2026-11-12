@@ -9,6 +9,7 @@ Every watchface that reads calendar plugins reads it the way it reads the Pebble
 - The calendars the Pebble app's built-in Calendar plugin already reads.
 - Up to two more calendars from an iCal link, such as a Google Calendar, a team schedule, or a sports fixture list.
 - One agenda, soonest first, with each event shown once.
+- A Look Ahead you set, from today only to a month.
 - A Refresh Interval you set, for how old a feed's copy can get.
 - Your private iCal links kept in the phone's encrypted storage.
 
@@ -27,6 +28,7 @@ Open Calendar + iCal's settings in the Pebble app.
 | :-- | :-- |
 | Show Phone Calendars | Merges in the phone's calendars, on by default. Which calendars show is picked in the built-in Calendar plugin's settings in the Pebble app, not here. |
 | Feed 1 and Feed 2 | Each has a switch, a name, and an iCal link. The name shows as the calendar each of the feed's events came from. A `webcal://` link works, and is fetched as `https://`. |
+| Look Ahead | Sets how far ahead the calendar goes, from today only to a month, 1 week by default. Your iCal feeds follow it in full, though a watchface that only shows a week still shows a week. Events from your phone's calendars come through the Pebble app, which only shares the next seven days, so they stop at a week whatever you pick. If you'd like that longer, it's one for Eric at Pebble. |
 | Refresh Interval | The most a feed's copy can age before the next run fetches it again, from 5 minutes to 1 hour, 30 minutes by default. It is a ceiling rather than a schedule, since the Pebble app decides when the plugin runs. |
 
 > [!WARNING]
@@ -65,8 +67,8 @@ Each event goes out under an id made from its start and title, so a face sees th
 The plugin has no timers. The Pebble app runs it about every five minutes while a face is subscribed, and again when the phone's calendars change. Each run reads the phone and both feeds side by side, merges them, and answers.
 
 * **The Phone's Calendars** are read from the built-in Calendar plugin by its uuid, which reaches it even while Calendar + iCal is the preferred source. A read the Pebble app refuses, such as one without the Calendar permission, leaves the feeds serving on their own.
-* **Each Feed** keeps its last good copy in `localStorage`, with a fingerprint of its link rather than the link. A run fetches the feed again once the copy reaches the Refresh Interval, or once the phone's midnight has passed since the fetch. A fetch that fails, or brings back something that is not iCal, keeps the copy and is tried again on the next run. Turning a feed off, or changing or clearing its link, drops the copy.
-* **The Agenda** is today and the next six days, soonest first, at most 20 events. An event on the phone and in a feed shows once, as the phone's copy, when the two have the same title, the same start, and the same all-day flag. An event both feeds carry shows once when it has the same UID and start in each.
+* **Each Feed** keeps its last good copy in `localStorage`, with a fingerprint of its link rather than the link. A run fetches the feed again once the copy reaches the Refresh Interval, once the phone's midnight has passed since the fetch, or once the Look Ahead changes. A fetch that fails, or brings back something that is not iCal, keeps the copy and is tried again on the next run. Turning a feed off, or changing or clearing its link, drops the copy.
+* **The Agenda** runs from today to the end of the Look Ahead's last day on the phone's clock, soonest first, at most 20 events. An event on the phone and in a feed shows once, as the phone's copy, when the two have the same title, the same start, and the same all-day flag. An event both feeds carry shows once when it has the same UID and start in each.
 
 The iCal links go to `Pebble.secureStorage`, which the phone encrypts and only the plugin can read. The other settings go to `localStorage`.
 
