@@ -2,7 +2,7 @@
   "name": "stocks-crypto",
   "displayName": "Stocks + Crypto",
   "uuid": "77e6eeb3-340a-46f8-ba39-5e2000b6fce3",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "sdkVersion": "3",
   "projectType": "plugin",
   "configPage": "config.html",
