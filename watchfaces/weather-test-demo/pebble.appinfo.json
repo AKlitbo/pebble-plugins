@@ -1,0 +1,36 @@
+{
+  "name": "weather-test-demo",
+  "displayName": "Weather Test Demo",
+  "version": "0.2.0",
+  "watchface": true,
+  "uuid": "2f5fe67a-5829-4e23-87c3-2c2a498006a4",
+  "sdkVersion": "3",
+  "enableMultiJS": true,
+  "targetPlatforms": ["emery", "gabbro"],
+  "capabilities": ["configurable", "location"],
+  "defines": {
+    "PLUGIN_WEATHER": 1
+  },
+  "providers": {
+    "weather": ["plugin"]
+  },
+  "messageKeys": [
+    "WEATHER_CONDITION_LABEL",
+    "WEATHER_FEELS_LIKE",
+    "WEATHER_PRESSURE",
+    "WEATHER_DEW_POINT",
+    "WEATHER_UV_INDEX",
+    "WEATHER_TEMP_MAX",
+    "WEATHER_TEMP_MIN",
+    "WEATHER_PRECIP_CHANCE",
+    "LOCATION_LATITUDE",
+    "LOCATION_LONGITUDE",
+    "TEST_PLUGIN",
+    "TEST_ERROR",
+    "TEST_PLACE",
+    "TEST_WMO"
+  ],
+  "resources": {
+    "media": []
+  }
+}
