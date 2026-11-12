@@ -23,6 +23,7 @@ jobs:
         include:
           - { plugin: calendar-ical, unit: plugins/calendar-ical }
           - { plugin: stocks-crypto, unit: plugins/stocks-crypto }
+          - { plugin: weather-enhanced, unit: plugins/weather-enhanced }
     steps:
       - uses: actions/checkout@v7
 

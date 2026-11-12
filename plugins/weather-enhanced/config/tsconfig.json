@@ -1,0 +1,7 @@
+// typechecks the plugin's script and its settings page against the framework, which they import from paf/
+// the framework's weather providers are shared with faces, so the PebbleKit JS globals they name come along
+{
+  "extends": "../paf/tsconfig.json",
+  "include": ["../src/**/*.ts", "../paf/ts/**/*.d.ts"],
+  "exclude": ["../node_modules", "../targets", "../**/*.spec.ts"]
+}
