@@ -4,6 +4,8 @@ All notable changes to Calendar Enhanced + iCal are recorded here, following [Ke
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-18
+
 ### Added
 
 - Added a Hide Events in Progress setting, which takes a meeting off the agenda when it starts, or once it has been going 15, 30, or 60 minutes. All-day events, and anything that runs a day or more, stay until they end.
