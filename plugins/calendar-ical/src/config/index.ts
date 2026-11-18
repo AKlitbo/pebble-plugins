@@ -1,5 +1,5 @@
 /**
- * Calendar + iCal's settings page. The framework builds it into the pbw's config.html,
+ * Calendar Enhanced + iCal's settings page. The framework builds it into the pbw's config.html,
  * loads the saved settings from the plugin when it opens, and hands them back on Save.
  */
 
@@ -40,7 +40,7 @@ function warning(text: string): string {
 }
 
 export const clayConfig: ClayConfigItem[] = [
-  { type: 'heading', defaultValue: 'Calendar + iCal' },
+  { type: 'heading', defaultValue: 'Calendar Enhanced + iCal' },
   { type: 'text', defaultValue: "Serves your phone's calendars and up to two iCal links, merged into one agenda, to every watchface that reads calendar plugins." },
   {
     type: 'section',

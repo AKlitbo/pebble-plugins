@@ -1,5 +1,5 @@
 /**
- * Specs for one run of Calendar + iCal from end to end, against a stand-in for the Pebble
+ * Specs for one run of Calendar Enhanced + iCal from end to end, against a stand-in for the Pebble
  * app's runtime and a stubbed fetch.
  *
  * Each part has its own spec. What is pinned here is that the settings the page saved reach the

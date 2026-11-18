@@ -115,7 +115,7 @@ describe('createAgendaNames', () => {
   test('adds nothing before an agenda has gone to the watch', () => {
     const names = createAgendaNames();
 
-    names.noticeSend({ 10: 'Calendar + iCal' }, keys);
+    names.noticeSend({ 10: 'Calendar Enhanced + iCal' }, keys);
 
     const result = names.extras({ instances: [instance('Hi', 0x6af61500, 'Work')] }, keys);
 

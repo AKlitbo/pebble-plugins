@@ -1,5 +1,5 @@
 /**
- * Specs for reading Calendar + iCal's saved selects and switches.
+ * Specs for reading Calendar Enhanced + iCal's saved selects and switches.
  *
  * Clay saves a select as text, and settings saved before a select was added have no value for it.
  * Anything but one of the page's choices has to read as the week, or a stray value gives the wearer a

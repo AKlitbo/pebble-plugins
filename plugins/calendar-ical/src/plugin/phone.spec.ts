@@ -2,9 +2,9 @@
  * Specs for reading the phone's calendars through the built-in.
  *
  * The built-in sends an all-day event in a different shape on each phone. Android sends UTC midnight
- * to UTC midnight, and an iPhone sends local midnight to 23:59:59 UTC on the last day. Calendar + iCal
- * serves one shape whichever phone it is on, so both have to come out on the same days. A refused read
- * must leave the feeds serving rather than fail the run.
+ * to UTC midnight, and an iPhone sends local midnight to 23:59:59 UTC on the last day. Calendar
+ * Enhanced + iCal serves one shape whichever phone it is on, so both have to come out on the same
+ * days. A refused read must leave the feeds serving rather than fail the run.
  *
  * The usual now is Wednesday 4 November 2026 at 12:00 in Toronto, which is UTC-5 then.
  */
@@ -61,7 +61,7 @@ async function servedDays(update: SourceEnvelope): Promise<Array<number | undefi
 }
 
 describe('phoneEvents', () => {
-  /** A face reading Calendar + iCal must see Friday's holiday on Friday, from either phone. */
+  /** A face reading Calendar Enhanced + iCal must see Friday's holiday on Friday, from either phone. */
   test.each([
     ['an Android', Date.UTC(2026, 10, 6) / 1000, Date.UTC(2026, 10, 7) / 1000],
     ['an iPhone', Date.UTC(2026, 10, 6, 5) / 1000, Date.UTC(2026, 10, 6, 23, 59, 59) / 1000],

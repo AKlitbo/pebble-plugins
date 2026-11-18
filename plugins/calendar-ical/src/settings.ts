@@ -1,5 +1,5 @@
 /**
- * Calendar + iCal's settings, shared by its settings page and its plugin script, so the keys,
+ * Calendar Enhanced + iCal's settings, shared by its settings page and its plugin script, so the keys,
  * their defaults, and which ones are secret are written once.
  *
  * The two feed links are secret, since a private iCal link works like a password, so the plugin keeps

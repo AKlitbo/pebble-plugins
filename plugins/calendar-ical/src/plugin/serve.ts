@@ -1,5 +1,5 @@
 /**
- * Calendar + iCal's answer to the Pebble app, its agenda as the standard `calendar/event`
+ * Calendar Enhanced + iCal's answer to the Pebble app, its agenda as the standard `calendar/event`
  * source.
  *
  * Each run reads the settings, reads the phone and both feeds side by side, merges them, and serves
@@ -102,7 +102,7 @@ export async function agendaAnswer(context: ServeContext, nowMs: number): Promis
 }
 
 /**
- * Has the Pebble app ask Calendar + iCal for its agenda.
+ * Has the Pebble app ask Calendar Enhanced + iCal for its agenda.
  *
  * @param context Where each run reads from.
  * @param clock Reads the time now, normally `Date.now`.
@@ -114,7 +114,7 @@ export function handleSource(context: ServeContext, clock: () => number = Date.n
     try {
       respond.data(await agendaAnswer(context, nowMs));
     } catch (error) {
-      console.log(`Calendar + iCal: the agenda could not be built, ${error}`);
+      console.log(`Calendar Enhanced + iCal: the agenda could not be built, ${error}`);
       respond.error('PLUGIN_UNAVAILABLE', String(error));
     }
   });

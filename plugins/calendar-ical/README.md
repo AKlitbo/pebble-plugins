@@ -1,4 +1,4 @@
-# Calendar + iCal
+# Calendar Enhanced + iCal
 
 A Pebble app plugin that puts the phone's calendars and up to two iCal links into one agenda on your watch.
 
@@ -17,13 +17,13 @@ Every watchface that reads calendar plugins reads it the way it reads the Pebble
 ## Installation
 
 1. **Turn Plugins On.** In the Pebble app, go to Settings, Plugins, and turn on Plugins / permissions preview.
-2. **Install Calendar + iCal** from the Pebble app store.
-3. **Make It the Calendar Source.** Under Preferred Sources in the Pebble app's plugin settings, pick Calendar + iCal for Calendar. With no other calendar plugin installed, the Pebble app uses it on its own.
+2. **Install Calendar Enhanced + iCal** from the Pebble app store.
+3. **Make It the Calendar Source.** Under Preferred Sources in the Pebble app's plugin settings, pick Calendar Enhanced + iCal for Calendar. With no other calendar plugin installed, the Pebble app uses it on its own.
 4. **Pick a Watchface** that shows calendar events.
 
 ## Configuration
 
-Open Calendar + iCal's settings in the Pebble app.
+Open Calendar Enhanced + iCal's settings in the Pebble app.
 
 | Setting | What It Does |
 | :-- | :-- |
@@ -35,7 +35,7 @@ Open Calendar + iCal's settings in the Pebble app.
 | Show All-Day Events | Keeps all-day events on the agenda, on by default. Turn it off when all-day reminders and statuses crowd out your next meeting. |
 
 > [!WARNING]
-> A private iCal link lets anyone who has it read that calendar. Treat it like a password, and don't share or post it. Calendar + iCal keeps it in the phone's encrypted storage, which only the plugin can read.
+> A private iCal link lets anyone who has it read that calendar. Treat it like a password, and don't share or post it. Calendar Enhanced + iCal keeps it in the phone's encrypted storage, which only the plugin can read.
 
 ### Google Calendar
 
@@ -52,7 +52,7 @@ The plugin asks for two. Internet fetches the iCal links, and Calendar reads the
 
 ## Data Source
 
-Calendar + iCal serves `calendar/event`, one instance per event, in the shapes the built-in Calendar plugin sends.
+Calendar Enhanced + iCal serves `calendar/event`, one instance per event, in the shapes the built-in Calendar plugin sends.
 
 | Property | What It Holds |
 | :-- | :-- |
@@ -69,7 +69,7 @@ Each event goes out under an id made from its start and title, so a face sees th
 
 The plugin has no timers. The Pebble app runs it about every five minutes while a face is subscribed, and again when the phone's calendars change. Each run reads the phone and both feeds side by side, merges them, and answers.
 
-* **The Phone's Calendars** are read from the built-in Calendar plugin by its uuid, which reaches it even while Calendar + iCal is the preferred source. A read the Pebble app refuses, such as one without the Calendar permission, leaves the feeds serving on their own.
+* **The Phone's Calendars** are read from the built-in Calendar plugin by its uuid, which reaches it even while Calendar Enhanced + iCal is the preferred source. A read the Pebble app refuses, such as one without the Calendar permission, leaves the feeds serving on their own.
 * **Each Feed** keeps its last good copy in `localStorage`, with a fingerprint of its link rather than the link. A run fetches the feed again once the copy reaches the iCal Refresh Interval, once the phone's midnight has passed since the fetch, or once the Look Ahead changes. A fetch that fails, or brings back something that is not iCal, keeps the copy and is tried again on the next run. Turning a feed off, or changing or clearing its link, drops the copy.
 * **The Agenda** runs from today to the end of the Look Ahead's last day on the phone's clock, soonest first, at most 20 events. An event on the phone and in a feed shows once, as the phone's copy, when the two have the same title, the same start, and the same all-day flag. An event both feeds carry shows once when it has the same UID and start in each.
 * **The Filters** come before the 20-event cap, so a hidden event makes room for the next one. The answer is marked good only until the next event in it ends or Hide Events in Progress takes it off, when that comes before the usual five minutes.
@@ -82,7 +82,7 @@ The iCal links go to `Pebble.secureStorage`, which the phone encrypts and only t
 
 * Phone events stop at 10, and at 7 days ahead, since that is all the built-in plugin serves.
 * The agenda holds at most 20 events across the phone and both feeds.
-* Every face reading Calendar + iCal gets the same agenda.
+* Every face reading Calendar Enhanced + iCal gets the same agenda.
 
 **Event Status**
 

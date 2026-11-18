@@ -1,5 +1,5 @@
 /**
- * Specs for Calendar + iCal's settings page against the settings the plugin reads.
+ * Specs for Calendar Enhanced + iCal's settings page against the settings the plugin reads.
  *
  * The page and the plugin each take their defaults from settings.ts, and the plugin reads a setting
  * the wearer never saved as its default. A row opening on another value would show one thing and serve

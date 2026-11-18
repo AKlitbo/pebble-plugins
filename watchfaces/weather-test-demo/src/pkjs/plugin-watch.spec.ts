@@ -15,7 +15,7 @@ const WEATHER_ENHANCED = 'f62c8e74-dd3c-4157-abf0-9a49aaaaaaaa';
 
 const PLUGINS: PluginSummary[] = [
   { uuid: WEATHER_ENHANCED, name: 'Weather Enhanced', sources: [{ category: 'weather', items: ['location'] }] },
-  { uuid: 'c6b7d0a7-32b5-47f2-9839-becd04965da2', name: 'Calendar + iCal', sources: [{ category: 'calendar', items: ['event'] }] },
+  { uuid: 'c6b7d0a7-32b5-47f2-9839-becd04965da2', name: 'Calendar Enhanced + iCal', sources: [{ category: 'calendar', items: ['event'] }] },
 ];
 
 describe('describeProperty', () => {
@@ -86,7 +86,7 @@ describe('describePlugins', () => {
     expect(result).toEqual([
       'the phone lists 2 plugins',
       `  Weather Enhanced ${WEATHER_ENHANCED}: serves weather/location`,
-      '  Calendar + iCal c6b7d0a7-32b5-47f2-9839-becd04965da2: serves calendar/event',
+      '  Calendar Enhanced + iCal c6b7d0a7-32b5-47f2-9839-becd04965da2: serves calendar/event',
     ]);
   });
 });

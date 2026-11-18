@@ -1,5 +1,5 @@
 /**
- * Calendar + iCal's two iCal feeds, each fetched again once its copy is older than the
+ * Calendar Enhanced + iCal's two iCal feeds, each fetched again once its copy is older than the
  * iCal Refresh Interval.
  *
  * The plugin has no timers. It runs cold whenever the Pebble app asks, about every five minutes, so
@@ -174,7 +174,7 @@ export async function feedEvents(feed: Feed, refreshMinutes: number, nowMs: numb
   try {
     events = ical.parseIcal(await fetchLink(cacheBust(link, nowMs)), Math.floor(nowMs / 1000), days);
   } catch (error) {
-    console.log(`Calendar + iCal: feed ${feed.slot} could not be fetched, ${failureOf(error)}`);
+    console.log(`Calendar Enhanced + iCal: feed ${feed.slot} could not be fetched, ${failureOf(error)}`);
   }
 
   if (!events) {
@@ -185,7 +185,7 @@ export async function feedEvents(feed: Feed, refreshMinutes: number, nowMs: numb
   try {
     storage.setItem(key, JSON.stringify({ link: stamp, fetchedMs: nowMs, days, events }));
   } catch (error) {
-    console.log(`Calendar + iCal: feed ${feed.slot} could not be kept, ${error}`);
+    console.log(`Calendar Enhanced + iCal: feed ${feed.slot} could not be kept, ${error}`);
   }
 
   return named(events, feed.name);

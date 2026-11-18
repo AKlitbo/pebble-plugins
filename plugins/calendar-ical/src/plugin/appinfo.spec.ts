@@ -1,5 +1,5 @@
 /**
- * Specs for the source Calendar + iCal declares in its appinfo.
+ * Specs for the source Calendar Enhanced + iCal declares in its appinfo.
  *
  * The appinfo is JSON, so its `calendar/event` source is a hand copy of the framework's
  * `CALENDAR_EVENT_SOURCE`, which declares what the framework sends. The Pebble app drops any property

@@ -6,7 +6,7 @@ The plugins in this repository are under the AGPL-3.0-or-later, see [LICENSE](LI
 
 ### ical.js
 
-The iCal reader in Calendar + iCal, which reads the wearer's iCal links. It reaches the plugin through the framework's calendar reader.
+The iCal reader in Calendar Enhanced + iCal, which reads the wearer's iCal links. It reaches the plugin through the framework's calendar reader.
 
 - **Source:** <https://github.com/kewisch/ical.js>
 - **Licence:** Mozilla Public License 2.0, published at <https://www.mozilla.org/en-US/MPL/2.0/>. The full text also ships in the package at `node_modules/ical.js/LICENSE`

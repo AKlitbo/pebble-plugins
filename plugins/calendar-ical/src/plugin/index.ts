@@ -1,5 +1,5 @@
 /**
- * Calendar + iCal's plugin script, where the Pebble app starts it.
+ * Calendar Enhanced + iCal's plugin script, where the Pebble app starts it.
  *
  * It answers the settings page and serves the agenda. Everything it does happens inside one of those
  * two answers, since the runtime starts it fresh for each request and keeps nothing running between.

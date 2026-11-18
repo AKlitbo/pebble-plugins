@@ -8,7 +8,7 @@ A plugin runs in the Pebble app on your phone and serves its data to every watch
 
 | Plugin | What It Serves | Source | Needs |
 | :-- | :-- | :-- | :-- |
-| [Calendar + iCal](plugins/calendar-ical/) | The phone's calendars and up to two iCal links, merged into one agenda. | `calendar/event` | Nothing for the phone's calendars, and an iCal link for each feed. |
+| [Calendar Enhanced + iCal](plugins/calendar-ical/) | The phone's calendars and up to two iCal links, merged into one agenda. | `calendar/event` | Nothing for the phone's calendars, and an iCal link for each feed. |
 | [Stocks + Crypto](plugins/stocks-crypto/) | Stock and crypto prices from Yahoo, Finnhub, Twelve Data, or Alpha Vantage, in the order you set. | `finance/stock` and `finance/crypto` | Nothing for Yahoo, and your own key for the others. |
 | [Weather Enhanced](plugins/weather-enhanced/) | The weather for the places in the Pebble app's weather list, from Open-Meteo, OpenWeatherMap, or WeatherAPI.com, kept inside each provider's plan. | `weather/location` | Nothing for Open-Meteo, and your own key for the others. |
 

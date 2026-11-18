@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Calendar + iCal are recorded here, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+All notable changes to Calendar Enhanced + iCal are recorded here, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
@@ -8,6 +8,10 @@ All notable changes to Calendar + iCal are recorded here, following [Keep a Chan
 
 - Added a Hide Events in Progress setting, which takes a meeting off the agenda when it starts, or once it has been going 15, 30, or 60 minutes. All-day events, and anything that runs a day or more, stay until they end.
 - Added a Show All-Day Events switch, on by default. Turn it off to keep all-day reminders and statuses from crowding out your next meeting.
+
+### Changed
+
+- Renamed the plugin to Calendar Enhanced + iCal.
 
 ## [1.1.0] - 2026-11-12
 

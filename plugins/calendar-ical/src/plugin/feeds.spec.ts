@@ -1,5 +1,5 @@
 /**
- * Specs for fetching and keeping Calendar + iCal's feeds.
+ * Specs for fetching and keeping Calendar Enhanced + iCal's feeds.
  *
  * The plugin runs every five minutes with no memory but storage, so whether a feed is fetched is
  * decided from its kept copy. Fetching too often spends the wearer's data on a feed that has not
@@ -211,7 +211,7 @@ describe('feedEvents', () => {
 
     await feedEvents(FEED, 30, NOW_MS, fetchLink, fakeStorage());
 
-    expect(logged.mock.calls.map((call) => String(call[0]))).toEqual(['Calendar + iCal: feed 1 could not be fetched, TypeError']);
+    expect(logged.mock.calls.map((call) => String(call[0]))).toEqual(['Calendar Enhanced + iCal: feed 1 could not be fetched, TypeError']);
     logged.mockRestore();
   });
 
