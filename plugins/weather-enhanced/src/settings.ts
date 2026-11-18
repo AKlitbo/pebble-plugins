@@ -5,7 +5,9 @@
  * Each keyed provider keeps a key of its own, and its own Paid Plan switch, so switching provider and
  * back loses nothing. The keys are secret, so the plugin keeps them in the phone's encrypted storage.
  * The refresh is how many minutes a place's copy is served before the next fetch. Each unit reads
- * `app` until the wearer overrides it, which follows the Pebble app's own setting.
+ * `app` until the wearer overrides it, which follows the Pebble app's own setting. The place list holds
+ * the wearer's order and switches for the Pebble app's weather places and the places added on the page,
+ * as JSON in a hidden row, and Pebble App Places says whether the Pebble app's places count at all.
  */
 
 import type { SettingsOptions } from '../paf/ts/plugin-app/settings';
@@ -59,8 +61,58 @@ export const PROVIDERS: Provider[] = [
 /** Open-Meteo, which every provider's forecast comes from and which answers when the picked one cannot. */
 export const OPEN_METEO = PROVIDERS[0];
 
-/** The most places the plugin fetches, from the top of the Pebble app's weather list. */
+/** The most places the plugin fetches, from the top of the wearer's place list. */
 export const MOST_PLACES = 5;
+
+/** The most places the wearer can add on the settings page. */
+export const MOST_ADDED = 5;
+
+/** The longest name an added place keeps. */
+export const NAME_MAX = 40;
+
+/** What every added place's id starts with, which keeps it apart from the Pebble app's keys. */
+export const ADDED_PREFIX = 'own-';
+
+/**
+ * A place from the Pebble app's weather list on the wearer's place list, as `PLACE_LIST` saves it.
+ *
+ * It is marked `app` and keeps only its key and its switch. Its name and coordinates come from the
+ * Pebble app on every run, so a renamed place or a current location that moves never goes stale here.
+ */
+export interface AppPlaceEntry {
+  /** The place's key in the Pebble app's weather list. */
+  id: string;
+  app: true;
+  /** Whether watchfaces get the place. */
+  on: boolean;
+}
+
+/**
+ * A place the wearer added on the settings page, as `PLACE_LIST` saves it.
+ *
+ * It keeps its own name and coordinates, to four decimals, under an id made once when it was added.
+ * Changing a place means removing it and adding it again under a new id, so a saved reading never
+ * outlives the coordinates it was fetched for.
+ */
+export interface AddedPlaceEntry {
+  /** `own-` and a few random letters, which watchfaces get the place under. */
+  id: string;
+  /** Whether watchfaces get the place. */
+  on: boolean;
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+/** One place on the wearer's place list. */
+export type PlaceEntry = AppPlaceEntry | AddedPlaceEntry;
+
+/**
+ * The Places to Fetch value for First Location Only. Weather Enhanced 1.0.0 saved that setting under
+ * `PLACES`, and a save that still holds this value reads as only the first place switched on, until
+ * the wearer saves the page again.
+ */
+export const FIRST_PLACE_ONLY = 'first';
 
 /** Every setting's key and the value it opens on. */
 export const DEFAULTS = {
@@ -69,7 +121,8 @@ export const DEFAULTS = {
   OWM_PAID: false,
   WEATHERAPI_KEY: '',
   WEATHERAPI_PAID: false,
-  PLACES: 'all',
+  USE_APP_PLACES: true,
+  PLACE_LIST: '[]',
   REFRESH: '30',
   TEMPERATURE_UNIT: 'app',
   WIND_UNIT: 'app',
@@ -83,12 +136,6 @@ export const SETTINGS_OPTIONS: SettingsOptions = {
   refresh: ['weather/location'],
 };
 
-/** The Places to Fetch choices, as the page offers them. */
-export const PLACES_CHOICES = [
-  { label: 'First Location Only', value: 'first' },
-  { label: `All Locations (up to ${MOST_PLACES})`, value: 'all' },
-];
-
 /** The Refresh Interval choices, in minutes, as the page offers them. */
 export const REFRESH_MINUTES = ['15', '30', '60', '120'];
 
@@ -100,6 +147,9 @@ export const APP_UNIT_LABEL = 'Pebble App';
 
 /** The message the settings page sends the plugin for the Pebble app's units. */
 export const UNITS_MESSAGE = 'weather-enhanced-units';
+
+/** The message the settings page sends the plugin for the place list, the Pebble app's places in the wearer's order. */
+export const PLACES_MESSAGE = 'weather-enhanced-places';
 
 /** Each unit row, against the name its unit goes by in the framework's weather units. */
 export const UNIT_ROWS = { TEMPERATURE_UNIT: 'temperature', WIND_UNIT: 'windSpeed', PRESSURE_UNIT: 'pressure' } as const;

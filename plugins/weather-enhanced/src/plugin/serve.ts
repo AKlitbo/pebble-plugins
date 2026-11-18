@@ -27,7 +27,7 @@ import { readingStatus } from '../../paf/ts/weather/reading';
 import type { ReadingResult, WeatherReading } from '../../paf/ts/weather/reading';
 import { DEFAULTS, REFRESH_MINUTES, SETTINGS_OPTIONS, providerOf } from '../settings';
 import type { Provider, ProviderId } from '../settings';
-import { isFresh, noteTries, readCopies, readTries, saveCopies, standsIn, triedLately } from './copies';
+import { forgetUnlisted, isFresh, noteTries, readCopies, readTries, saveCopies, standsIn, triedLately } from './copies';
 import type { Copy } from './copies';
 import { setStop, stoppedBy } from './gates';
 import { openMeter, roomFor, stampSends } from './meter';
@@ -255,10 +255,10 @@ export async function weatherAnswer(context: ServeContext, startMs: number, aske
   const paid = provider.paidSetting ? settings[provider.paidSetting] === true : false;
   // a value the page never offered, such as 0 or a negative, would fetch on every run or almost never
   const refreshMs = Number(REFRESH_MINUTES.includes(String(settings.REFRESH)) ? settings.REFRESH : DEFAULTS.REFRESH) * MINUTE_MS;
-  const [{ places, error }, units] = await Promise.all([placesToFetch(context.pebble, settings.PLACES), pebbleAppUnits(context.pebble, overridesOf(settings))]);
+  const [{ places, error }, units] = await Promise.all([placesToFetch(context.pebble, settings), pebbleAppUnits(context.pebble, overridesOf(settings))]);
 
   if (places.length === 0) {
-    throw new Error(error ? `the places could not be read, ${error}` : "the Pebble app's weather list has no place with coordinates");
+    throw new Error(error ? `the places could not be read, ${error}` : 'no place is switched on with coordinates');
   }
 
   const print = provider.keySetting && key ? keyPrint(key) : '';
@@ -276,7 +276,7 @@ export async function weatherAnswer(context: ServeContext, startMs: number, aske
   });
 
   const asking: Asking = { provider, key, print, paid, listed: places.map((place) => place.key) };
-  const tries = readTries(context.storage);
+  const tries = forgetUnlisted(context.storage, readTries(context.storage), asking.listed);
   // a place asked for inside the Refresh Interval waits for it, even when that ask failed
   const due = places.filter((place) => (!copies[place.key] || !isFresh(copies[place.key], refreshMs, nowMs)) && !triedLately(tries[place.key], provider.id, print, refreshMs, nowMs));
   const results = due.length > 0 ? await fetchDue(context, asking, keysRead, due, nowMs) : {};

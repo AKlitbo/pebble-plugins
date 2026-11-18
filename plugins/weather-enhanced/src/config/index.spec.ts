@@ -6,6 +6,8 @@
  * another. The keys are the other thing worth pinning. A key left out of the secret list goes to the
  * phone's plain storage, and a key row shown under the wrong provider is saved where it is never read.
  * The credits under Save are what each provider's terms ask for, so the picked one has to be named.
+ * The place list is JSON in a row of its own, which the wearer should never see as text, and Add a
+ * Place saves only through it.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -31,11 +33,35 @@ describe('the settings page', () => {
     expect(result).toEqual(DEFAULTS);
   });
 
-  /** A fresh install has no key, so anything but Open-Meteo would serve nothing until the wearer finds the setting. */
-  test('opens on Open-Meteo, every place, 30 minutes, and the Pebble app units', () => {
-    const result = ['PROVIDER', 'PLACES', 'REFRESH', 'TEMPERATURE_UNIT', 'WIND_UNIT', 'PRESSURE_UNIT'].map((key) => rowOf(key)?.defaultValue);
+  /**
+   * A fresh install has no key, so anything but Open-Meteo would serve nothing until the wearer finds
+   * the setting. An empty place list serves every place in the Pebble app's order.
+   */
+  test('opens on Open-Meteo, Pebble App Places on, an empty place list, 30 minutes, and the Pebble app units', () => {
+    const result = ['PROVIDER', 'USE_APP_PLACES', 'PLACE_LIST', 'REFRESH', 'TEMPERATURE_UNIT', 'WIND_UNIT', 'PRESSURE_UNIT'].map((key) => rowOf(key)?.defaultValue);
 
-    expect(result).toEqual(['openmeteo', 'all', '30', 'app', 'app', 'app']);
+    expect(result).toEqual(['openmeteo', true, '[]', '30', 'app', 'app', 'app']);
+  });
+
+  /**
+   * The search and the Name are only the way to a new entry in the place list. Either one with a key
+   * would save the last pick or name as a setting of its own, which nothing reads.
+   */
+  test('saves nothing from the Add a Place rows', () => {
+    const result = rows(clayConfig).filter((item) => ['we-add-search', 'we-add-name', 'we-add'].includes(String(item.id))).map((item) => [item.type, item.messageKey]);
+
+    expect(result).toEqual([
+      ['locationsearch', undefined],
+      ['input', undefined],
+      ['button', undefined],
+    ]);
+  });
+
+  /** A text box of JSON on the page would be the first thing a wearer edits by hand. */
+  test('keeps the place list in a hidden input', () => {
+    const result = [rowOf('PLACE_LIST')?.type, rowOf('PLACE_LIST')?.attributes];
+
+    expect(result).toEqual(['input', { type: 'hidden' }]);
   });
 
   /** A key out of the secret list lands in plain storage. */

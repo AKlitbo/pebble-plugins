@@ -3,12 +3,19 @@
  * saved settings from the plugin when it opens, and hands them back on Save.
  *
  * It runs top to bottom in the order a wearer sets it up: the Data Source with the picked provider's
- * key and Paid Plan, the places, the refresh, and the units. The line about the watch's own Weather app
- * sits above Save, and the credits each picked provider asks for sit under it.
+ * key and Paid Plan, the places, adding a place, the refresh, and the units. The place list is drawn by
+ * the page code in places-page.ts into its text row, and kept in a hidden row the framework saves with
+ * the rest. Adding a place uses the framework's location search, which the page passes as a component,
+ * and its rows have no message key, so only the place list saves what they add. The line about the
+ * watch's own Weather app sits above Save, and the credits each picked provider asks for sit under it.
  */
 
+import { combineCustomFns } from '../../paf/ts/clay/custom-fn';
+import locationSearch from '../../paf/ts/clay/location-component';
 import type { ClayConfigItem } from '../../paf/ts/clay/types';
-import { APP_UNIT, APP_UNIT_LABEL, DEFAULTS, OPEN_METEO, PLACES_CHOICES, PROVIDERS, REFRESH_MINUTES, UNIT_CHOICES, UNIT_ROWS, UNITS_MESSAGE } from '../settings';
+import { ADDED_PREFIX, APP_UNIT, APP_UNIT_LABEL, DEFAULTS, MOST_ADDED, MOST_PLACES, NAME_MAX, OPEN_METEO, PLACES_MESSAGE, PROVIDERS, REFRESH_MINUTES, UNIT_CHOICES, UNIT_ROWS, UNITS_MESSAGE } from '../settings';
+import placesPage from './places-page';
+import type { PlacesOptions } from './places-page';
 import weatherPage from './weather-page';
 import type { UnitsOptions } from './weather-page';
 
@@ -41,6 +48,21 @@ function unitRow(messageKey: keyof typeof UNIT_CHOICES, label: string): ClayConf
 /** What the page code needs to ask the plugin for the Pebble app's units and show them. */
 const UNITS_OPTIONS: UnitsOptions = { unitsMessage: UNITS_MESSAGE, rows: UNIT_ROWS, appValue: APP_UNIT, appLabel: APP_UNIT_LABEL };
 
+/** What the page code needs to ask the plugin for the place list and save it. */
+const PLACES_OPTIONS: PlacesOptions = {
+  placesMessage: PLACES_MESSAGE,
+  listKey: 'PLACE_LIST',
+  useAppKey: 'USE_APP_PLACES',
+  most: MOST_PLACES,
+  mostAdded: MOST_ADDED,
+  addedPrefix: ADDED_PREFIX,
+  nameMax: NAME_MAX,
+  searchId: 'we-add-search',
+  nameId: 'we-add-name',
+  addId: 'we-add',
+  addNoteId: 'we-add-note',
+};
+
 /** A credit line under Save, centred by the framework's `pf-footer` class. */
 function creditRow(credit: string, visibleWhen?: ClayConfigItem['visibleWhen']): ClayConfigItem {
   const row: ClayConfigItem = { type: 'text', defaultValue: `<div class="pf-footer">${credit}</div>` };
@@ -69,8 +91,21 @@ export const clayConfig: ClayConfigItem[] = [
     type: 'section',
     items: [
       { type: 'heading', defaultValue: 'Places' },
-      { type: 'select', messageKey: 'PLACES', label: 'Places to Fetch', defaultValue: DEFAULTS.PLACES, options: PLACES_CHOICES },
-      { type: 'text', defaultValue: "The places come from the Pebble app's weather list, in its order." },
+      { type: 'toggle', messageKey: 'USE_APP_PLACES', label: 'Pebble App Places', defaultValue: DEFAULTS.USE_APP_PLACES },
+      { type: 'text', defaultValue: "The Pebble app's places are added, renamed, and removed in its weather list.", visibleWhen: { key: 'USE_APP_PLACES', in: [true] } },
+      { type: 'text', id: 'we-places', defaultValue: `Watchfaces get the places switched on here, top first, up to ${MOST_PLACES}. Move a place with its arrows.`, moduleOptions: PLACES_OPTIONS },
+      { type: 'input', messageKey: 'PLACE_LIST', label: 'Place List', defaultValue: DEFAULTS.PLACE_LIST, attributes: { type: 'hidden' } },
+      { type: 'text', defaultValue: "The watch's own Weather app and the timeline's weather pins keep the Pebble app's list and order, so a place switched off here still shows there, with weather from Pebble. Places added here show only on watchfaces." },
+    ],
+  },
+  {
+    type: 'section',
+    items: [
+      { type: 'heading', defaultValue: 'Add a Place' },
+      { type: 'locationsearch', id: 'we-add-search', label: 'Search', attributes: { placeholder: 'A town or city' } },
+      { type: 'input', id: 'we-add-name', label: 'Name', defaultValue: '', attributes: { autocapitalize: 'words', autocomplete: 'off' } },
+      { type: 'button', id: 'we-add', defaultValue: 'Add' },
+      { type: 'text', id: 'we-add-note', defaultValue: `Search for a place, pick it, and change its name if you like. Up to ${MOST_ADDED} places can be added.` },
     ],
   },
   {
@@ -103,4 +138,10 @@ export const clayConfig: ClayConfigItem[] = [
   ...PROVIDERS.filter((provider) => provider !== OPEN_METEO).map((provider) => creditRow(provider.credit, { key: 'PROVIDER', in: [provider.id] })),
 ];
 
-export const customClay = weatherPage;
+/** The framework's location search, which Add a Place searches with. */
+export const components = [locationSearch];
+
+export const customClay = combineCustomFns([
+  { code: weatherPage, label: 'the unit rows' },
+  { code: placesPage, label: 'the place list' },
+]);

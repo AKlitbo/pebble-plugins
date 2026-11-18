@@ -7,7 +7,7 @@ Every watchface that reads weather plugins reads Weather Enhanced with no change
 ## Features
 
 - Open-Meteo with no key, or your own OpenWeatherMap or WeatherAPI.com key.
-- The places in the Pebble app's weather list, the first one or all of them up to five.
+- The places in the Pebble app's weather list and up to five of your own, in your own order and each one switched on or off, up to five at a time.
 - Pressure, dew point, and the full weather code now, beside the standard set.
 - Every provider held inside its plan's limits, with a Paid Plan switch to lift them for a keyed one.
 - The last good reading kept for a while, then Open-Meteo, when your provider cannot answer.
@@ -19,7 +19,7 @@ Every watchface that reads weather plugins reads Weather Enhanced with no change
 1. **Turn Plugins On.** In the Pebble app, go to Settings, Plugins, and turn on Plugins / permissions preview.
 2. **Install Weather Enhanced** from the Pebble app store.
 3. **Make It the Weather Provider.** In the Pebble app, go to Settings, Weather, and pick Weather Enhanced as the Weather provider. Weather under Preferred Sources in the plugin settings is the same choice, so either place sets it. It feeds the watch's own Weather app and timeline, and every face that reads the weather. A face that names the built-in Weather plugin itself keeps reading the built-in.
-4. **Add Your Places** to the Pebble app's weather list. Weather Enhanced fetches the places on that list and nowhere else.
+4. **Add Your Places** to the Pebble app's weather list, or on Weather Enhanced's settings page under Add a Place. The settings page then picks which of them watchfaces get, and in what order.
 5. **Pick a Watchface** that shows weather.
 
 ## Configuration
@@ -31,11 +31,13 @@ Open Weather Enhanced's settings in the Pebble app.
 | Data Source | Where the weather comes from: Open-Meteo, OpenWeatherMap, or WeatherAPI.com. Open-Meteo by default. |
 | API Key | One per keyed provider, shown while that provider is picked. Switching provider and back keeps each key. |
 | Paid Plan | One per keyed provider, off by default. Turn it on if your key is on a paid plan, and the plugin stops holding it to the free plan's limits. |
-| Places to Fetch | The first place in the Pebble app's weather list, or all of them up to five, which is the default. |
+| Pebble App Places | On by default. Off leaves the Pebble app's places out of what watchfaces get and hides their rows, so only the places you add count. |
+| Places | Every place, each with arrows to move it and a switch, and a Remove button on a place you added. Watchfaces get the places switched on, top first, up to five. The Pebble app's places start on, in its order, and a place added in the Pebble app later starts on at the bottom. They are added, renamed, and removed in the Pebble app. |
+| Add a Place | Search for a town or city, pick it, change its name if you like, and press Add. Up to five places can be added. To change one, remove it and add it again. |
 | Refresh Interval | How old a place's reading can get before the next run fetches it again: 15, 30, 60, or 120 minutes, 30 by default. It is a ceiling rather than a schedule, since the Pebble app decides when the plugin runs. While your provider cannot answer, its last reading can stand in for up to three intervals, as How It Works covers. |
 | Units | Shows the units the Pebble app is set to, which the plugin follows by default. Each unit can be overridden here. An override reaches watchfaces, while the watch's own Weather app keeps the Pebble app's units. |
 
-**The Watch's Weather App.** The page says that picking Weather Enhanced as the preferred weather source also makes it the source for the watch's own Weather app and the timeline's weather pins.
+**The Watch's Weather App.** The page says that picking Weather Enhanced as the preferred weather source also makes it the source for the watch's own Weather app and the timeline's weather pins. The Places section says those keep the Pebble app's list and order, so a place switched off on the page still shows there, with weather from Pebble's servers, and a place you add shows only on watchfaces.
 
 **Credits.** The footer under Save credits Open-Meteo always, and OpenWeatherMap or WeatherAPI.com while that one is picked.
 
@@ -51,11 +53,11 @@ Open-Meteo needs none. Each of the others gives a free key when you sign up on i
 
 ## Permissions
 
-The plugin asks for Internet once for each provider's site: `open-meteo.com`, `api.openweathermap.org`, and `api.weatherapi.com`. Open-Meteo's is required, since every provider's forecast series come from it and it is the fallback when your provider fails. The other two are optional, so you allow only the one you use. It also needs Location to read the places in the Pebble app's weather list, and a watchface reading Weather Enhanced asks for Location too, as it does for the Pebble app's own Weather plugin.
+The plugin asks for Internet once for each provider's site: `open-meteo.com`, `api.openweathermap.org`, and `api.weatherapi.com`. Open-Meteo's is required, since every provider's forecast series come from it and it is the fallback when your provider fails. The other two are optional, so you allow only the one you use. It also needs Location to read the places in the Pebble app's weather list, and a watchface reading Weather Enhanced asks for Location too, as it does for the Pebble app's own Weather plugin. Add a Place searches with Open-Meteo's geocoder, which the `open-meteo.com` permission covers.
 
 ## Data Source
 
-Weather Enhanced serves `weather/location`, one instance per place, under the place's key from the Pebble app's weather list.
+Weather Enhanced serves `weather/location`, one instance per place switched on, in the order of the settings page's place list. A place from the Pebble app's weather list goes out under its key there, and a place you added under its own id, which starts with `own-`.
 
 Temperatures, wind, and pressure go out in your units, and every numeric field carries its unit, so a face that converts reads them either way. An hourly series starts at the place's own midnight, one hour apart for 48 hours. A daily series starts with the place's today, one day apart for 8 days.
 
@@ -124,7 +126,7 @@ Neither the built-in Weather plugin nor the standard carries a place's coordinat
 
 | Property | What It Holds |
 | :-- | :-- |
-| `latitude`, `longitude` | The place's coordinates, from the Pebble app's weather list, to four decimal places. |
+| `latitude`, `longitude` | The place's coordinates, from the Pebble app's weather list or the place you added, to four decimal places. |
 
 ### Where It Came From
 
@@ -141,8 +143,8 @@ The plugin has no timers, and the Pebble app stops each run after 20 seconds. Ea
 
 The Pebble app runs it every 15 minutes for each reader, and the watch's own Weather app counts as one, so a face and the Weather app together make about eight runs an hour. It also runs when a reader starts, and when the Pebble app's weather list changes.
 
-* **The Places.** Each run reads the Pebble app's weather list, in your order, and takes the first place or up to five, as Places to Fetch says. The current location carries the coordinates of the Pebble app's last fix. When it has none, the plugin skips it for that run.
-* **The Copy.** Each place keeps a copy of its last reading. A run answers from the copy until it reaches the Refresh Interval, then fetches that place again and keeps the result. A place whose fetch failed waits out the Refresh Interval too, so a provider that is down is asked once an interval rather than on every run.
+* **The Places.** Each run reads the Pebble app's weather list and lays the place list over it. The places it names come first, in its order, then any place it does not name, switched on, in the Pebble app's order. The run takes the first five switched on. For a Pebble app place the list keeps only its key and switch, so its name and coordinates always come fresh from the Pebble app. A place you added keeps its own name and coordinates. While Pebble App Places is off, the run takes only the places you added. The current location carries the coordinates of the Pebble app's last fix. When it has none, the plugin skips it for that run and the next place moves up.
+* **The Copy.** Each place keeps a copy of its last reading. A run answers from the copy until it reaches the Refresh Interval, then fetches that place again and keeps the result. A place whose fetch failed waits out the Refresh Interval too, so a provider that is down is asked once an interval rather than on every run. A place switched off keeps neither its copy nor its last ask, so it is fetched as soon as it is switched back on.
 * **The Fetch.** Every place is fetched side by side. Open-Meteo is asked for every place in one request. OpenWeatherMap's free call and WeatherAPI.com give the reading now, and the hourly and daily series come from Open-Meteo, so every provider gives the same forecast.
 * **The Limits.** The framework's ledger counts every call against each provider's plan, Open-Meteo's included, and says how many more fit. Open-Meteo counts a request asking for many readings as several calls, so the ledger counts each call by that weight. A provider that answers `RATE LIMIT` anyway is left alone until its shortest limit opens again, a minute for Open-Meteo and OpenWeatherMap, and never longer than an hour. WeatherAPI.com is held until the 1st of the month only when it says the month's calls are spent, and for an hour after any other rate limit. A key on Paid Plan is left alone for a minute, and turning Paid Plan on or off lifts the hold. A provider that answers `INVALID KEY` is left alone until you save the settings, or for a day.
 * **The Fallback.** When your provider cannot answer, the last reading it gave for a place is served while it is under three Refresh Intervals old. Past that the plugin serves the Open-Meteo reading fetched beside your provider's for the forecast, and `source` says so. An Open-Meteo reading kept from an earlier fallback is only served while it is fresh, so a newer one always wins. Only when there is none, such as while your provider is held, does it ask Open-Meteo on its own, and only while the run has time left. A run whose Open-Meteo half already failed does not ask it again.
@@ -151,7 +153,7 @@ The Pebble app runs it every 15 minutes for each reader, and the watch's own Wea
 
 ### The Watch's Weather App
 
-When Weather Enhanced is your preferred weather source, the Pebble app reads it for the watch's own Weather app and the timeline's weather pins, and waits up to 45 seconds for the answer. It takes a place only when the plugin sends the temperature now, the weather code, the place's offset from UTC, and today's and tomorrow's high, low, weather, sunrise, and sunset. A place the plugin leaves out, such as the current location with no coordinates, comes from the Pebble app's own servers instead.
+When Weather Enhanced is your preferred weather source, the Pebble app reads it for the watch's own Weather app and the timeline's weather pins, and waits up to 45 seconds for the answer. It takes a place only when the plugin sends the temperature now, the weather code, the place's offset from UTC, and today's and tomorrow's high, low, weather, sunrise, and sunset. A place the plugin leaves out, such as one switched off or the current location with no coordinates, comes from the Pebble app's own servers instead. The Weather app keeps the Pebble app's list and order whatever the place list says, and a plugin cannot change that. It also skips every place you added, since it only takes a place from its own list.
 
 The API keys go to `Pebble.secureStorage`, which the phone encrypts and only the plugin can read. The other settings go to `localStorage`.
 
@@ -182,7 +184,8 @@ The API keys go to `Pebble.secureStorage`, which the phone encrypts and only the
 
 **Places**
 
-* Only the places in the Pebble app's weather list, and at most five.
+* At most five places at a time, and at most five added on the settings page.
+* The watch's own Weather app and the timeline's weather pins keep the Pebble app's list and order. Switching a place off, moving it, or adding one only reaches watchfaces.
 * The current location is skipped for a run when the Pebble app has no fix for it.
 * Every face reading Weather Enhanced gets the same places.
 
@@ -215,4 +218,4 @@ paf typecheck
 paf check
 ```
 
-The pbw lands in `plugins/weather-enhanced/targets/weather-enhanced/build/`. The plugin's script starts in `src/plugin/index.ts` and its settings page in `src/config/index.ts`, and both read the settings in `src/settings.ts`. The places it reads live in `src/plugin/places.ts` and the run in `src/plugin/serve.ts`, with each place's copy in `copies.ts`, the stops in `gates.ts`, and the counting in `meter.ts` beside it. The free plans it holds each provider to are in `src/limits.ts`. They sit on top of the framework's weather source in `ts/plugin-app/weather.ts` and its shared ledger in `ts/quota/`.
+The pbw lands in `plugins/weather-enhanced/targets/weather-enhanced/build/`. The plugin's script starts in `src/plugin/index.ts` and its settings page in `src/config/index.ts`, with the place list and Add a Place in `src/config/places-page.ts`, and both read the settings in `src/settings.ts`. The places it reads live in `src/plugin/places.ts`, laid over the wearer's place list in `place-list.ts`, and the run in `src/plugin/serve.ts`, with each place's copy in `copies.ts`, the stops in `gates.ts`, and the counting in `meter.ts` beside it. The free plans it holds each provider to are in `src/limits.ts`. They sit on top of the framework's weather source in `ts/plugin-app/weather.ts` and its shared ledger in `ts/quota/`.

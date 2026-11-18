@@ -160,12 +160,13 @@ export interface FakePhone {
 
 /**
  * A phone with the plugin installed, these places in the Pebble app's weather list, and these
- * settings already saved.
+ * settings already saved. A reason given in `refusePlaces` has the Pebble app refuse the read of the
+ * list with it, as it does before the wearer allows Location.
  *
- * @param options The places, the saved settings, the secret keys, how each site answers, and when the clock starts.
+ * @param options The places, the saved settings, the secret keys, how each site answers, when the clock starts, and a refused read.
  * @return The phone.
  */
-export function fakePhone(options: { places?: WeatherPlace[]; settings?: Record<string, unknown>; keys?: Record<string, string>; sites?: Sites; nowMs?: number; clock?: () => number } = {}): FakePhone {
+export function fakePhone(options: { places?: WeatherPlace[]; settings?: Record<string, unknown>; keys?: Record<string, string>; sites?: Sites; nowMs?: number; clock?: () => number; refusePlaces?: string } = {}): FakePhone {
   let nowMs = options.nowMs ?? NOW_MS;
   const clock = options.clock || (() => nowMs);
   const storage = memoryStorage();
@@ -181,7 +182,13 @@ export function fakePhone(options: { places?: WeatherPlace[]; settings?: Record<
     registerConfigHandler: (handler: typeof configHandler) => void (configHandler = handler),
     subscribeSource: () => undefined,
     refreshSources: () => undefined,
-    readSource: async (asking: SourceRequest) => (asking.item === 'weather_location' ? placesEnvelope(options.places || [TORONTO]) : { instances: [] }),
+    readSource: async (asking: SourceRequest) => {
+      if (asking.item === 'weather_location' && options.refusePlaces) {
+        throw Object.assign(new Error(options.refusePlaces), { code: options.refusePlaces });
+      }
+
+      return asking.item === 'weather_location' ? placesEnvelope(options.places || [TORONTO]) : { instances: [] };
+    },
     secureStorage: {
       getItem: async (key: string) => keys.get(key) ?? null,
       setItem: async (key: string, value: string) => void keys.set(key, value),

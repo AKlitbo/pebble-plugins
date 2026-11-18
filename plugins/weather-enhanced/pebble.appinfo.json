@@ -2,7 +2,7 @@
   "name": "weather-enhanced",
   "displayName": "Weather Enhanced",
   "uuid": "55e15682-999f-4ffa-bc43-6798e11a4b26",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "sdkVersion": "3",
   "projectType": "plugin",
   "configPage": "config.html",
@@ -10,7 +10,7 @@
     { "name": "Internet", "parameters": { "domains": ["open-meteo.com"] }, "reason": "To get the weather from Open-Meteo, which fills the forecast for every provider and answers when yours cannot", "required": true },
     { "name": "Internet", "parameters": { "domains": ["api.openweathermap.org"] }, "reason": "To get the weather from OpenWeatherMap, when you pick it", "required": false },
     { "name": "Internet", "parameters": { "domains": ["api.weatherapi.com"] }, "reason": "To get the weather from WeatherAPI.com, when you pick it", "required": false },
-    { "name": "Location", "reason": "To read the places in the Pebble app's weather list", "required": true }
+    { "name": "Location", "reason": "To read the places in the Pebble app's weather list, and to share their weather and the weather for places you add with watchfaces", "required": true }
   ],
   "plugin": {
     "description": "The weather for your places, from Open-Meteo with no key, or your own OpenWeatherMap or WeatherAPI.com key. Every watchface that reads weather plugins can show it.",

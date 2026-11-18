@@ -368,19 +368,93 @@ describe('the failover', () => {
   });
 });
 
-describe('what is served', () => {
-  /** More than five places would spend Open-Meteo past the plan's weight, and First Location Only has to mean one. */
+/** A saved place list in the form the settings page writes it. */
+function placeList(entries: Array<[string, boolean]>): string {
+  return JSON.stringify(entries.map(([id, on]) => ({ id, app: true, on })));
+}
+
+/** The keys of the places a run served, in order. */
+function servedKeys(served: { data?: { instances: Array<{ instanceId?: string }> } }): Array<string | undefined> {
+  return (served.data?.instances || []).map((instance) => instance.instanceId);
+}
+
+describe('the place list', () => {
+  /** More than five places would spend Open-Meteo past the plan's weight, and a saved First Location Only from 1.0.0 has to keep meaning one. */
   test.each([
-    ['first', 1],
-    ['all', 5],
-  ])('serves the places Places to Fetch %s asks for', async (setting, count) => {
+    [{ PLACES: 'first' }, 1],
+    [{}, 5],
+  ])('serves the places %o asks for', async (settings, count) => {
     const places = Array.from({ length: 6 }, (_, index) => ({ ...LONDON, key: `place-${index}`, lat: LONDON.lat + index / 100 }));
-    const phone = fakePhone({ places, settings: { PLACES: setting } });
+    const phone = fakePhone({ places, settings });
 
     const result = await phone.run();
 
-    expect(result.data?.instances.map((instance) => instance.instanceId)).toEqual(places.slice(0, count).map((place) => place.key));
+    expect(servedKeys(result)).toEqual(places.slice(0, count).map((place) => place.key));
   });
+
+  /** A face showing one place shows the top one, so the wearer's order has to reach it. */
+  test("serves the places in the list's order, leaving out one switched off", async () => {
+    const phone = fakePhone({ places: [TORONTO, LONDON, { ...LONDON, key: 'paris', lat: 48.85 }], settings: { PLACE_LIST: placeList([['london', true], ['toronto', false]]) } });
+
+    const result = await phone.run();
+
+    expect(servedKeys(result)).toEqual(['london', 'paris']);
+  });
+
+  /**
+   * A place switched off keeps no copy, so switched on again it is fetched fresh rather than served a
+   * reading from whenever it was last on.
+   */
+  test('fetches a place switched back on rather than serving its old copy', async () => {
+    const phone = fakePhone({ places: [TORONTO, LONDON] });
+
+    await phone.run();
+    await phone.save({ PLACE_LIST: placeList([['toronto', true], ['london', false]]) });
+    await phone.run();
+    await phone.save({ PLACE_LIST: placeList([['toronto', true], ['london', true]]) });
+    phone.asked.length = 0;
+
+    await phone.run();
+    const result = phone.asked.map((url) => url.includes(`latitude=${LONDON.lat}`));
+
+    expect(result).toEqual([true]);
+  });
+
+  /**
+   * A place added on the page goes out under its own id, which the watch's own Weather app ignores,
+   * and is fetched at its own coordinates. Pebble App Places off has to leave the Pebble app's places
+   * out of the answer and out of the fetch.
+   */
+  test('serves only the added places while Pebble App Places is off', async () => {
+    const cottage = { id: 'own-k3j9q2', on: true, name: 'Cottage', lat: 45.1234, lon: -79.5678 };
+    const phone = fakePhone({ places: [TORONTO, LONDON], settings: { USE_APP_PLACES: false, PLACE_LIST: JSON.stringify([cottage]) } });
+
+    const result = await phone.run();
+
+    expect([servedKeys(result), phone.asked.every((url) => url.includes('latitude=45.1234') && url.includes('longitude=-79.5678'))]).toEqual([['own-k3j9q2'], true]);
+  });
+
+  /** A wearer who never allows Location still added places of their own, and a refused read must not cost them those. */
+  test('serves the added places when the Pebble app refuses the read', async () => {
+    const cottage = { id: 'own-k3j9q2', on: true, name: 'Cottage', lat: 45.1234, lon: -79.5678 };
+    const phone = fakePhone({ refusePlaces: 'PERMISSION_DENIED', settings: { PLACE_LIST: JSON.stringify([{ id: 'toronto', app: true, on: true }, cottage]) } });
+
+    const result = await phone.run();
+
+    expect(servedKeys(result)).toEqual(['own-k3j9q2']);
+  });
+
+  /** With every place off the plugin has nothing to serve, and half an answer would leave the Pebble app nothing to fill. */
+  test('answers PLUGIN_UNAVAILABLE with every place switched off', async () => {
+    const phone = fakePhone({ places: [TORONTO, LONDON], settings: { PLACE_LIST: placeList([['toronto', false], ['london', false]]) } });
+
+    const result = await phone.run();
+
+    expect([result.error, phone.asked.length]).toEqual(['PLUGIN_UNAVAILABLE', 0]);
+  });
+});
+
+describe('what is served', () => {
 
   /** A face naming the series it shows should not carry every other series across to the phone. */
   test('sends only the series a request names', async () => {
@@ -443,10 +517,10 @@ describe('what is served', () => {
 
   /** The Pebble app reads again when the answer runs out, so a later time would leave the older place's weather stale. */
   test("says the answer is good until the oldest place's copy is due", async () => {
-    const phone = fakePhone({ places: [TORONTO, LONDON], settings: { REFRESH: '30', PLACES: 'first' } });
+    const phone = fakePhone({ places: [TORONTO, LONDON], settings: { REFRESH: '30', PLACE_LIST: placeList([['toronto', true], ['london', false]]) } });
 
     await phone.run();
-    await phone.save({ REFRESH: '30', PLACES: 'all' });
+    await phone.save({ REFRESH: '30', PLACE_LIST: placeList([['toronto', true], ['london', true]]) });
     phone.advance(10 * MINUTE_MS);
 
     const result = await phone.run();

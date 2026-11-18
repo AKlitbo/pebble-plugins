@@ -201,6 +201,38 @@ export function noteTries(storage: CopyStorage, asked: string[], listed: string[
 }
 
 /**
+ * Lets go of the asks of places this run does not list, such as one the wearer switched off, so the
+ * place is asked for straight away once it is back rather than waiting out an ask from before. It
+ * writes only when there is an ask to let go of.
+ *
+ * @param storage Where the asks are kept, normally `localStorage`.
+ * @param tries The asks as this run read them.
+ * @param listed Every place this run serves.
+ * @return The asks still listed.
+ */
+export function forgetUnlisted(storage: CopyStorage, tries: Record<string, Try>, listed: string[]): Record<string, Try> {
+  const kept: Record<string, Try> = {};
+
+  listed.forEach((key) => {
+    if (tries[key]) {
+      kept[key] = tries[key];
+    }
+  });
+
+  if (Object.keys(kept).length === Object.keys(tries).length) {
+    return tries;
+  }
+
+  try {
+    storage.setItem(TRIES_KEY, JSON.stringify(kept));
+  } catch (error) {
+    console.log(`Weather Enhanced: the asks could not be kept, ${error}`);
+  }
+
+  return kept;
+}
+
+/**
  * Whether a place was asked of this provider and key inside the Refresh Interval, so it is not asked
  * again yet. A clock set back before the ask lets the place be asked.
  *
