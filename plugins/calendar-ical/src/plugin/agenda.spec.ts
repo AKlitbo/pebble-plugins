@@ -6,22 +6,59 @@
  * the soonest events, and an event's id has to stay the same between runs, or a face reading the
  * agenda sees every event as new each time.
  *
+ * The wearer's filters are pinned at their edges. Hide Events in Progress has to take a timed event
+ * off on the second its cutoff comes, the same second the answer runs out. It must never touch an
+ * all-day event, or every one of them would go at midnight, nor a timed event a day or longer, which is
+ * still current long after it starts. Show All-Day Events has to reach the phone's
+ * events and the feeds' alike. Both have to come before the cap, or a hidden event leaves the agenda
+ * short.
+ *
+ * The answer runs out the next moment the agenda changes on its own, so that moment has to be the
+ * soonest of every event's end and every cutoff that applies, or a reader keeps an event that has gone.
+ *
  * The usual now is Wednesday 4 November 2026 at 12:00 in Toronto. The window runs to the end of
  * Tuesday 10 November there.
  */
 
 import { describe, test, expect } from 'vitest';
 import type { CalendarEvent } from '../../paf/ts/calendar/ical';
-import { MAX_EVENTS, mergeAgenda } from './agenda';
+import { MAX_EVENTS, mergeAgenda, nextChange } from './agenda';
+import type { AgendaFilters } from './agenda';
 
 // Wednesday 4 November 2026, 12:00 in Toronto, which is UTC-5
 const NOW = Date.UTC(2026, 10, 4, 17) / 1000;
 
-const HOUR = 60 * 60;
+const MINUTE = 60;
+const HOUR = 60 * MINUTE;
+
+// midnight on Wednesday 4 November in Toronto, where today's all-day events start
+const MIDNIGHT = Date.UTC(2026, 10, 4, 5) / 1000;
 
 /** A timed hour-long event, some hours from now. */
 function event(title: string, hoursAhead: number, extra: Partial<CalendarEvent> = {}): CalendarEvent {
   return { startEpoch: NOW + hoursAhead * HOUR, endEpoch: NOW + (hoursAhead + 1) * HOUR, allDay: false, title, location: '', ...extra };
+}
+
+/** A timed two-hour event that started some minutes ago. */
+function started(title: string, minutesAgo: number): CalendarEvent {
+  const startEpoch = NOW - minutesAgo * MINUTE;
+
+  return { startEpoch, endEpoch: startEpoch + 2 * HOUR, allDay: false, title, location: '' };
+}
+
+/** An all-day event today. */
+function allDay(title: string): CalendarEvent {
+  return { startEpoch: MIDNIGHT, endEpoch: MIDNIGHT + 24 * HOUR, allDay: true, title, location: '' };
+}
+
+/** The filters a wearer who never opens them has, with these ones set. */
+function filtersWith(set: Partial<AgendaFilters>): AgendaFilters {
+  return { hideStartedAfter: null, allDay: true, ...set };
+}
+
+/** The titles on the agenda under these filters, in order. */
+function filtered(phone: CalendarEvent[], feed: CalendarEvent[], set: Partial<AgendaFilters>): string[] {
+  return mergeAgenda(phone, [{ source: 'feed1', events: feed }], NOW, {}, filtersWith(set)).map((entry) => entry.event.title);
 }
 
 /** The titles on the agenda, in order. */
@@ -114,5 +151,155 @@ describe('mergeAgenda', () => {
     const result = mergeAgenda([event('Standup', 1, { calendar: 'Work' }), event('Standup', 1, { calendar: 'Team' })], [], NOW);
 
     expect(new Set(result.map((entry) => entry.instanceId)).size).toBe(2);
+  });
+});
+
+describe('Hide Events in Progress', () => {
+  const DAY = [started('Started 45 Ago', 45), started('Started 20 Ago', 20), started('Started 5 Ago', 5), event('Next Hour', 1)];
+
+  /** Each choice has to hide what it names and nothing more, or the wearer loses a meeting they still wanted. */
+  test.each([
+    [null, ['Started 45 Ago', 'Started 20 Ago', 'Started 5 Ago', 'Next Hour']],
+    [0, ['Next Hour']],
+    [15, ['Started 5 Ago', 'Next Hour']],
+    [30, ['Started 20 Ago', 'Started 5 Ago', 'Next Hour']],
+    [60, ['Started 45 Ago', 'Started 20 Ago', 'Started 5 Ago', 'Next Hour']],
+  ])('with %s minutes keeps %j', (hideStartedAfter, expected) => {
+    const result = filtered([], DAY, { hideStartedAfter });
+
+    expect(result).toEqual(expected);
+  });
+
+  /** The answer runs out on the cutoff, so an event still kept on that second would outlast the answer that said it was going. */
+  test('takes an event off on the second it has been going 15 minutes', () => {
+    const atCutoff = started('At Cutoff', 15);
+    const justInside = { ...started('Just Inside', 15), startEpoch: NOW - 15 * MINUTE + 1 };
+
+    const result = filtered([atCutoff, justInside], [], { hideStartedAfter: 15 });
+
+    expect(result).toEqual(['Just Inside']);
+  });
+
+  /** When They Start means the meeting goes the moment it begins, not a minute into it. */
+  test('takes an event off on the second it starts with When They Start', () => {
+    const startsNow = started('Starts Now', 0);
+    const nextSecond = { ...started('Next Second', 0), startEpoch: NOW + 1 };
+
+    const result = filtered([startsNow, nextSecond], [], { hideStartedAfter: 0 });
+
+    expect(result).toEqual(['Next Second']);
+  });
+
+  /** A hotel stay is still on for days after check-in, so a cutoff on it would lose it for the whole trip. */
+  test('keeps a timed event a day or longer past its cutoff, and hides a shorter one', () => {
+    const hotel = { ...started('Hotel', 3 * 60), endEpoch: NOW - 3 * HOUR + 3 * 24 * HOUR };
+    const fullDay = { ...started('Full Day', 2 * 60), endEpoch: NOW - 2 * HOUR + 24 * HOUR };
+    const overnight = { ...started('Overnight Shift', 90), endEpoch: NOW - 90 * MINUTE + 23 * HOUR };
+    const meeting = started('Planning', 60);
+
+    const result = filtered([hotel, fullDay, overnight, meeting], [], { hideStartedAfter: 15 });
+
+    expect(result).toEqual(['Hotel', 'Full Day']);
+  });
+
+  /** Every all-day event starts at midnight, so treating one as in progress would empty the day of them. */
+  test("keeps the phone's and the feeds' all-day events", () => {
+    const result = filtered([allDay('Holiday')], [allDay('Out of Office')], { hideStartedAfter: 0 });
+
+    expect(result).toEqual(['Holiday', 'Out of Office']);
+  });
+});
+
+describe('Show All-Day Events', () => {
+  const PHONE = [allDay('Holiday'), event('Dentist', 1)];
+  const FEED = [allDay('Out of Office'), event('Standup', 2)];
+
+  /** All-day reminders crowd out the next real meeting, from whichever calendar they come. */
+  test("drops the phone's and the feeds' all-day events when off, and keeps the timed ones", () => {
+    const result = filtered(PHONE, FEED, { allDay: false });
+
+    expect(result).toEqual(['Dentist', 'Standup']);
+  });
+
+  /** A wearer who leaves it on has to keep seeing every all-day event. */
+  test("keeps the phone's and the feeds' all-day events when on", () => {
+    const result = filtered(PHONE, FEED, { allDay: true });
+
+    expect(result).toEqual(['Holiday', 'Out of Office', 'Dentist', 'Standup']);
+  });
+});
+
+describe('the filters', () => {
+  /** A cut taken before the filters leaves the agenda short by every event they hide. */
+  test('fill the cap from what is left after them', () => {
+    const hidden = [allDay('Status 1'), allDay('Status 2'), started('Running 1', 10), started('Running 2', 5)];
+    const upcoming = Array.from({ length: MAX_EVENTS }, (_, index) => event(`Event ${index}`, index + 1));
+
+    const result = filtered([], [...hidden, ...upcoming], { hideStartedAfter: 0, allDay: false });
+
+    expect([result.length, result[0], result[MAX_EVENTS - 1]]).toEqual([MAX_EVENTS, 'Event 0', `Event ${MAX_EVENTS - 1}`]);
+  });
+
+  /** A wearer who never opens the filters reads them as Never with all-day events shown, and their agenda must not change. */
+  test('leave the agenda as it is on Never with all-day events shown', () => {
+    const result = filtered([allDay('Holiday'), started('Planning', 30)], [event('Standup', 1)], { hideStartedAfter: null, allDay: true });
+
+    expect(result).toEqual(['Holiday', 'Planning', 'Standup']);
+  });
+});
+
+describe('nextChange', () => {
+  /** The answer has to run out when the first event goes, not a later one, or that event lingers. */
+  test('gives the soonest moment an event on the agenda leaves', () => {
+    const agenda = mergeAgenda([started('Started 5 Ago', 5), started('Started 10 Ago', 10), event('Next Hour', 1)], [], NOW, {}, filtersWith({ hideStartedAfter: 15 }));
+
+    const result = nextChange(agenda, 15);
+
+    expect(result).toBe(NOW + 5 * MINUTE);
+  });
+
+  /** A meeting that ends before its cutoff is gone by then, so a reader waiting for the cutoff keeps it after it ended. */
+  test('gives the second after a meeting ends when its cutoff falls after that', () => {
+    const shortMeeting = { ...started('Quick Sync', 10), endEpoch: NOW + 2 * MINUTE };
+    const agenda = mergeAgenda([shortMeeting], [], NOW, {}, filtersWith({ hideStartedAfter: 15 }));
+
+    const result = nextChange(agenda, 15);
+
+    expect(result).toBe(NOW + 2 * MINUTE + 1);
+  });
+
+  /** With Never picked an event still leaves when it ends, and the answer must not outlast it. */
+  test('gives the second after the soonest end with Never', () => {
+    const agenda = mergeAgenda([started('Planning', 5), event('Next Hour', 1)], [], NOW);
+
+    const result = nextChange(agenda, null);
+
+    expect(result).toBe(NOW - 5 * MINUTE + 2 * HOUR + 1);
+  });
+
+  /** An all-day event never leaves under the filter, so its midnight start must not cut the answer short. */
+  test("gives an all-day event's end rather than a cutoff under When They Start", () => {
+    const agenda = mergeAgenda([allDay('Holiday')], [], NOW, {}, filtersWith({ hideStartedAfter: 0 }));
+
+    const result = nextChange(agenda, 0);
+
+    expect(result).toBe(MIDNIGHT + 24 * HOUR + 1);
+  });
+
+  /** A hotel stay's cutoff passed hours ago, and counting it would give an answer that has already run out. */
+  test('leaves out the cutoff of a timed event a day or longer', () => {
+    const hotel = { ...started('Hotel', 60), endEpoch: NOW + 2 * 24 * HOUR };
+    const agenda = mergeAgenda([hotel], [], NOW, {}, filtersWith({ hideStartedAfter: 15 }));
+
+    const result = nextChange(agenda, 15);
+
+    expect(result).toBe(NOW + 2 * 24 * HOUR + 1);
+  });
+
+  /** An empty agenda has nothing to run out on, so the answer keeps its full five minutes. */
+  test('gives nothing for an empty agenda', () => {
+    const result = nextChange([], 0);
+
+    expect(result).toBeNull();
   });
 });

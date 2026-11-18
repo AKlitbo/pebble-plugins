@@ -61,7 +61,7 @@ async function titles(feed: Feed, refreshMinutes: number, nowMs: number, fetchLi
 
 describe('feedEvents', () => {
   /** Fetching on every run spends the wearer's data on a feed that has not had time to change. */
-  test('serves a copy younger than the Refresh Interval without fetching', async () => {
+  test('serves a copy younger than the iCal Refresh Interval without fetching', async () => {
     const storage = fakeStorage();
     const { calls, fetchLink } = fetches(calendarOf('Standup'), calendarOf('Retro'));
 
@@ -73,7 +73,7 @@ describe('feedEvents', () => {
   });
 
   /** Runs come five minutes apart and can land a little early, and a 5 minute interval still has to fetch on each one. */
-  test('fetches again on a run that lands a little before the Refresh Interval', async () => {
+  test('fetches again on a run that lands a little before the iCal Refresh Interval', async () => {
     const storage = fakeStorage();
     const { fetchLink } = fetches(calendarOf('Standup'), calendarOf('Retro'));
 

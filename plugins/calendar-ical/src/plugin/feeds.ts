@@ -1,9 +1,10 @@
 /**
- * Calendar + iCal's two iCal feeds, each fetched again once its copy is older than the Refresh Interval.
+ * Calendar + iCal's two iCal feeds, each fetched again once its copy is older than the
+ * iCal Refresh Interval.
  *
  * The plugin has no timers. It runs cold whenever the Pebble app asks, about every five minutes, so
- * each run decides for itself whether a feed's copy is still fresh, and the Refresh Interval only spaces
- * the fetches out across those runs. A fetch that fails, or brings back something that is not iCal,
+ * each run decides for itself whether a feed's copy is still fresh, and the iCal Refresh Interval only
+ * spaces the fetches out across those runs. A fetch that fails, or brings back something that is not iCal,
  * keeps the last good copy and is tried again on the next run.
  *
  * The copies sit in `localStorage` with a fingerprint of the link they came from rather than the link
@@ -41,7 +42,7 @@ interface FeedCopy {
 }
 
 // the Pebble app's runs come about five minutes apart and can land a little early
-// a copy this close to the Refresh Interval counts as due, or a 5 minute interval would fetch every other run
+// a copy this close to the iCal Refresh Interval counts as due, or a 5 minute interval would fetch every other run
 const EARLY_RUN_MS = 60 * 1000;
 
 /**

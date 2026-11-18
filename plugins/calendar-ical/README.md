@@ -10,7 +10,8 @@ Every watchface that reads calendar plugins reads it the way it reads the Pebble
 - Up to two more calendars from an iCal link, such as a Google Calendar, a team schedule, or a sports fixture list.
 - One agenda, soonest first, with each event shown once.
 - A Look Ahead you set, from today only to a month.
-- A Refresh Interval you set, for how old a feed's copy can get.
+- Filters to hide meetings already underway and to leave out all-day events.
+- An iCal Refresh Interval you set, for how old a feed's copy can get.
 - Your private iCal links kept in the phone's encrypted storage.
 
 ## Installation
@@ -27,9 +28,11 @@ Open Calendar + iCal's settings in the Pebble app.
 | Setting | What It Does |
 | :-- | :-- |
 | Show Phone Calendars | Merges in the phone's calendars, on by default. Which calendars show is picked in the built-in Calendar plugin's settings in the Pebble app, not here. |
-| Feed 1 and Feed 2 | Each has a switch, a name, and an iCal link. The name shows as the calendar each of the feed's events came from. A `webcal://` link works, and is fetched as `https://`. |
+| iCal Feed 1 and iCal Feed 2 | Each has a switch, a name, and an iCal link. The name shows as the calendar each of the feed's events came from. A `webcal://` link works, and is fetched as `https://`. |
+| iCal Refresh Interval | The most a feed's copy can age before the next run fetches it again, from 5 minutes to 1 hour, 30 minutes by default. It is a ceiling rather than a schedule, since the Pebble app decides when the plugin runs. |
 | Look Ahead | Sets how far ahead the calendar goes, from today only to a month, 1 week by default. Your iCal feeds follow it in full, though a watchface that only shows a week still shows a week. Events from your phone's calendars come through the Pebble app, which only shares the next seven days, so they stop at a week whatever you pick. If you'd like that longer, it's one for Eric at Pebble. |
-| Refresh Interval | The most a feed's copy can age before the next run fetches it again, from 5 minutes to 1 hour, 30 minutes by default. It is a ceiling rather than a schedule, since the Pebble app decides when the plugin runs. |
+| Hide Events in Progress | Takes a meeting off the agenda once it has been going a while, so a face shows what comes next. Never by default, or When They Start, 15 Minutes After, 30 Minutes After, or 60 Minutes After. All-day events, and anything that runs a day or more, stay until they end. |
+| Show All-Day Events | Keeps all-day events on the agenda, on by default. Turn it off when all-day reminders and statuses crowd out your next meeting. |
 
 > [!WARNING]
 > A private iCal link lets anyone who has it read that calendar. Treat it like a password, and don't share or post it. Calendar + iCal keeps it in the phone's encrypted storage, which only the plugin can read.
@@ -39,7 +42,7 @@ Open Calendar + iCal's settings in the Pebble app.
 1. Open [Google Calendar](https://calendar.google.com) on a computer.
 2. Open Settings, then pick the calendar under Settings for My Calendars.
 3. Under Integrate Calendar, copy **Secret address in iCal format**.
-4. Paste it into Feed 1 or Feed 2, give the feed a name, and turn it on.
+4. Paste it into iCal Feed 1 or iCal Feed 2, give the feed a name, and turn it on.
 
 Each link covers one calendar, so a second Google calendar goes in the other feed. Outlook and iCloud also give an iCal link when you publish or share a calendar.
 
@@ -67,8 +70,9 @@ Each event goes out under an id made from its start and title, so a face sees th
 The plugin has no timers. The Pebble app runs it about every five minutes while a face is subscribed, and again when the phone's calendars change. Each run reads the phone and both feeds side by side, merges them, and answers.
 
 * **The Phone's Calendars** are read from the built-in Calendar plugin by its uuid, which reaches it even while Calendar + iCal is the preferred source. A read the Pebble app refuses, such as one without the Calendar permission, leaves the feeds serving on their own.
-* **Each Feed** keeps its last good copy in `localStorage`, with a fingerprint of its link rather than the link. A run fetches the feed again once the copy reaches the Refresh Interval, once the phone's midnight has passed since the fetch, or once the Look Ahead changes. A fetch that fails, or brings back something that is not iCal, keeps the copy and is tried again on the next run. Turning a feed off, or changing or clearing its link, drops the copy.
+* **Each Feed** keeps its last good copy in `localStorage`, with a fingerprint of its link rather than the link. A run fetches the feed again once the copy reaches the iCal Refresh Interval, once the phone's midnight has passed since the fetch, or once the Look Ahead changes. A fetch that fails, or brings back something that is not iCal, keeps the copy and is tried again on the next run. Turning a feed off, or changing or clearing its link, drops the copy.
 * **The Agenda** runs from today to the end of the Look Ahead's last day on the phone's clock, soonest first, at most 20 events. An event on the phone and in a feed shows once, as the phone's copy, when the two have the same title, the same start, and the same all-day flag. An event both feeds carry shows once when it has the same UID and start in each.
+* **The Filters** come before the 20-event cap, so a hidden event makes room for the next one. The answer is marked good only until the next event in it ends or Hide Events in Progress takes it off, when that comes before the usual five minutes.
 
 The iCal links go to `Pebble.secureStorage`, which the phone encrypts and only the plugin can read. The other settings go to `localStorage`.
 
@@ -96,6 +100,7 @@ The iCal links go to `Pebble.secureStorage`, which the phone encrypts and only t
 **Refreshing**
 
 * The runtime has no timers, so a feed's host that never answers is only cut off where the runtime offers `AbortSignal.timeout`, after 8 seconds.
+* A meeting Hide Events in Progress takes off can stay on a face until the Pebble app next runs the plugin, up to five minutes, since the Pebble app runs it on its own schedule.
 
 ## Building
 

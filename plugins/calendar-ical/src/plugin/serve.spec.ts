@@ -1,6 +1,6 @@
 /**
- * Specs for one run of Calendar + iCal from end to end, against a stand-in for the Pebble app's
- * runtime and a stubbed fetch.
+ * Specs for one run of Calendar + iCal from end to end, against a stand-in for the Pebble
+ * app's runtime and a stubbed fetch.
  *
  * Each part has its own spec. What is pinned here is that the settings the page saved reach the
  * parts, with the feed link coming from the encrypted storage, and that the answer the Pebble app gets
@@ -9,6 +9,11 @@
  *
  * The Look Ahead is pinned here too, since the feeds' walk and the agenda's cut both have to take it.
  * A window that one of them misses ends a day early or late, or drops a recurring event's later weeks.
+ *
+ * So is the answer's expiry, with the filters it hangs on. The answer has to run out when the next
+ * event in it ends or Hide Events in Progress takes it off, or a reader that honours the expiry keeps
+ * a meeting that has gone for the rest of the five minutes. Settings saved before the filters existed
+ * must serve the same agenda as before.
  *
  * The usual now is Wednesday 4 November 2026 at 12:00 in Toronto.
  */
@@ -43,9 +48,13 @@ const PHONE_UPDATE: SourceEnvelope = {
 /** A feed of one meeting, Thursday 5 November 2026 at 15:00 UTC. */
 const FEED = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'UID:standup@example.com', 'DTSTART:20261105T150000Z', 'DTEND:20261105T153000Z', 'SUMMARY:Standup', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
 
-/** A feed of these events, each a title, its start and end as iCal writes them in UTC, and any rule. */
-function feedOf(...events: Array<{ title: string; start: string; end: string; rule?: string }>): string {
-  const lines = events.flatMap(({ title, start, end, rule }) => ['BEGIN:VEVENT', `UID:${title}@example.com`, `DTSTART:${start}`, `DTEND:${end}`, ...(rule ? [`RRULE:${rule}`] : []), `SUMMARY:${title}`, 'END:VEVENT']);
+/** A feed of these events, each a title, its start and end as iCal writes them in UTC or as dates for an all-day one, and any rule. */
+function feedOf(...events: Array<{ title: string; start: string; end: string; rule?: string; allDay?: boolean }>): string {
+  const lines = events.flatMap(({ title, start, end, rule, allDay }) => {
+    const shape = allDay ? ';VALUE=DATE' : '';
+
+    return ['BEGIN:VEVENT', `UID:${title}@example.com`, `DTSTART${shape}:${start}`, `DTEND${shape}:${end}`, ...(rule ? [`RRULE:${rule}`] : []), `SUMMARY:${title}`, 'END:VEVENT'];
+  });
 
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', ...lines, 'END:VCALENDAR'].join('\r\n');
 }
@@ -91,6 +100,11 @@ function shown(answers: Awaited<ReturnType<typeof run>>): string[] {
   const answer = answers[0] as { instances: SourceInstance[] };
 
   return answer.instances.map((instance) => `${instance.properties?.name?.longText?.text} (${instance.properties?.calendar?.longText?.text})`);
+}
+
+/** How long the answer is good for, in milliseconds past the usual now. */
+function lasts(answers: Awaited<ReturnType<typeof run>>): number {
+  return (answers[0] as { validUntilMs: number }).validUntilMs - NOW_MS;
 }
 
 /** When each served instance starts, in UTC. */
@@ -173,5 +187,81 @@ describe('the Look Ahead', () => {
     const answers = await run(phone, TEAM_LINK);
 
     expect(answers).toEqual([{ validUntilMs: NOW_MS + ANSWER_MS, instances: [] }]);
+  });
+});
+
+describe('the filters', () => {
+  const MINUTE_MS = 60 * 1000;
+  // 11:47 on Wednesday in Toronto, 13 minutes before now, and Thursday's standup
+  const DAY = feedOf({ title: 'Planning', start: '20261104T164700Z', end: '20261104T174700Z' }, { title: 'Standup', start: '20261105T150000Z', end: '20261105T153000Z' });
+  // all of Wednesday 4 November
+  const WITH_ALL_DAY = feedOf({ title: 'Out of Office', start: '20261104', end: '20261105', allDay: true }, { title: 'Standup', start: '20261105T150000Z', end: '20261105T153000Z' });
+
+  /** A meeting due to leave two minutes from now would be promised for the other three without the earlier expiry. */
+  test('runs the answer out when the next event is due to leave', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', HIDE_STARTED: '15' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, DAY);
+
+    expect([shown(answers), lasts(answers)]).toEqual([['Planning (Team)', 'Standup (Team)'], 2 * MINUTE_MS]);
+  });
+
+  /** A run at the moment that answer runs out has to drop the meeting, or the expiry promised something the next answer breaks. */
+  test('drops the event on the run at the moment the answer ran out', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', HIDE_STARTED: '15' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS + 2 * MINUTE_MS, DAY);
+
+    expect(shown(answers)).toEqual(['Standup (Team)']);
+  });
+
+  /** A meeting that ends before its cutoff is gone at its end, and an answer kept to the cutoff would show it for eight more minutes. */
+  test('runs the answer out when a meeting ends before its cutoff', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', HIDE_STARTED: '60' });
+    // 11:10 to 12:02 on Wednesday in Toronto, so its cutoff at 12:10 comes after it ends
+    const feed = feedOf({ title: 'Review', start: '20261104T161000Z', end: '20261104T170200Z' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, feed);
+
+    expect([shown(answers), lasts(answers)]).toEqual([['Review (Team)'], 2 * MINUTE_MS + 1000]);
+  });
+
+  /** Never only keeps a meeting until it ends, so the answer must not promise it for the rest of the five minutes. */
+  test('runs the answer out when a meeting ends with Never', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', HIDE_STARTED: 'never' });
+    // 11:30 to 12:02 on Wednesday in Toronto
+    const feed = feedOf({ title: 'Review', start: '20261104T163000Z', end: '20261104T170200Z' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, feed);
+
+    expect([shown(answers), lasts(answers)]).toEqual([['Review (Team)'], 2 * MINUTE_MS + 1000]);
+  });
+
+  /** An event that leaves after the next run anyway has no reason to bring that run forward. */
+  test('keeps the full gap when nothing leaves inside it', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', HIDE_STARTED: '30' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, DAY);
+
+    expect(lasts(answers)).toBe(ANSWER_MS);
+  });
+
+  /** The switch has to reach the agenda from the saved settings, or the wearer's all-day reminders stay. */
+  test('serves no all-day events with Show All-Day Events off', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', ALL_DAY_EVENTS: false });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, WITH_ALL_DAY);
+
+    expect(shown(answers)).toEqual(['Standup (Team)']);
+  });
+
+  /** A wearer updating from 1.1.0 has no filters saved, and must see the same agenda for the same five minutes. */
+  test('serves the meeting in progress and the all-day event from settings saved without the filters', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team' });
+    const feed = feedOf({ title: 'Out of Office', start: '20261104', end: '20261105', allDay: true }, { title: 'Planning', start: '20261104T164700Z', end: '20261104T174700Z' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, feed);
+
+    expect([shown(answers), lasts(answers)]).toEqual([['Out of Office (Team)', 'Planning (Team)'], ANSWER_MS]);
   });
 });
