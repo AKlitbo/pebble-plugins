@@ -4,6 +4,8 @@ All notable changes to Weather Enhanced are recorded here, following [Keep a Cha
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-18
+
 ### Added
 
 - Added a place list to the settings page, where each place in the Pebble app's weather list can be switched on or off and moved up or down, and watchfaces get the ones switched on in that order. The current location reads No Fix Right Now while the phone has no fix for it, and watchfaces get it once it has one. The watch's own Weather app and the timeline's weather pins keep the Pebble app's list and order.
