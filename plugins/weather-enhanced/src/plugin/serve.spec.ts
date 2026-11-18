@@ -421,6 +421,49 @@ describe('the place list', () => {
   });
 
   /**
+   * A current location with no fix for a run is still the wearer's place. Forgetting its last ask and
+   * its copy had a failing provider asked for it again as soon as the fix came back, spending a keyed
+   * provider's quota almost every run.
+   */
+  test('asks a failing provider no sooner for a place that lost its fix for a run', async () => {
+    const here = { ...LONDON, key: 'here', name: '', current: true };
+    const phone = fakePhone({ places: [here, TORONTO], settings: { ...OWM, REFRESH: '60' }, keys: KEY_A, sites: { owm: () => ['http 500'] } });
+
+    await phone.run();
+    phone.listPlaces([{ key: 'here', name: '', current: true }, TORONTO]);
+    phone.advance(15 * MINUTE_MS);
+    await phone.run();
+    phone.listPlaces([here, TORONTO]);
+    phone.advance(15 * MINUTE_MS);
+    const served = await phone.run();
+
+    const result = [sentTo(phone.asked, 'openweathermap.org'), servedKeys(served)];
+
+    expect(result).toEqual([2, ['here', 'toronto']]);
+  });
+
+  /**
+   * A refused read leaves a run only the added places. Forgetting every Pebble app place's last ask
+   * and copy then had a failing provider asked for all of them again once the read came back.
+   */
+  test('asks a failing provider no sooner for the Pebble app places after a refused read', async () => {
+    const cottage = { id: 'own-k3j9q2', on: true, name: 'Cottage', lat: 45.1234, lon: -79.5678 };
+    const phone = fakePhone({ places: [TORONTO], settings: { ...OWM, REFRESH: '60', PLACE_LIST: JSON.stringify([{ id: 'toronto', app: true, on: true }, cottage]) }, keys: KEY_A, sites: { owm: () => ['http 500'] } });
+
+    await phone.run();
+    phone.refusePlaces('PERMISSION_DENIED');
+    phone.advance(15 * MINUTE_MS);
+    await phone.run();
+    phone.refusePlaces();
+    phone.advance(15 * MINUTE_MS);
+    const served = await phone.run();
+
+    const result = [sentTo(phone.asked, 'openweathermap.org'), servedKeys(served)];
+
+    expect(result).toEqual([2, ['toronto', 'own-k3j9q2']]);
+  });
+
+  /**
    * A place added on the page goes out under its own id, which the watch's own Weather app ignores,
    * and is fetched at its own coordinates. Pebble App Places off has to leave the Pebble app's places
    * out of the answer and out of the fetch.

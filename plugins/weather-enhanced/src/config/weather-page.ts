@@ -8,30 +8,11 @@
  * the rows reading Pebble App, and nothing on the page waits on it.
  *
  * Clay writes this into the page as text and runs it there, so it reaches nothing outside itself: no
- * imports and no module-scope constants. The message and the row names ride in on the Units text
- * row's `moduleOptions`.
+ * imports but its types, which compile away, and no module-scope constants. The message and the row
+ * names ride in on the Units text row's `moduleOptions`.
  */
 
-/** The bits of a Clay row this reaches. */
-interface PageRow {
-  config: { moduleOptions?: UnitsOptions };
-  $element: HTMLElement[];
-  get(): unknown;
-}
-
-/** The bits of the Clay config page this reaches. */
-interface ClayPage {
-  EVENTS: { AFTER_BUILD: string };
-  on(event: string, handler: () => void): void;
-  getItemById(id: string): PageRow | undefined;
-  getItemByMessageKey(messageKey: string): PageRow | undefined;
-}
-
-/** The page's bridge to the plugin, as the Pebble app gives a settings page. */
-interface PageBridge {
-  addEventListener(name: string, listener: (event: { target: string }) => void): void;
-  sendMessage(target: string, message: unknown): Promise<unknown>;
-}
+import type { ClayPage, PluginPageBridge } from '../../paf/ts/plugin-app/page-types';
 
 /** What the Units text row hands the page code. */
 export interface UnitsOptions {
@@ -49,8 +30,8 @@ export interface UnitsOptions {
 export default function weatherPage(this: ClayPage): void {
   this.on(this.EVENTS.AFTER_BUILD, () => {
     const holder = this.getItemById('we-units');
-    const options = holder && holder.config.moduleOptions;
-    const bridge = (window as unknown as { Pebble?: PageBridge }).Pebble;
+    const options = holder && (holder.config.moduleOptions as UnitsOptions | undefined);
+    const bridge = (window as unknown as { Pebble?: PluginPageBridge }).Pebble;
 
     if (!options || !bridge || typeof bridge.sendMessage !== 'function' || typeof bridge.addEventListener !== 'function') {
       return;

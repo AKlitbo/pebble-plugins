@@ -27,8 +27,8 @@ import { readingStatus } from '../../paf/ts/weather/reading';
 import type { ReadingResult, WeatherReading } from '../../paf/ts/weather/reading';
 import { DEFAULTS, REFRESH_MINUTES, SETTINGS_OPTIONS, providerOf } from '../settings';
 import type { Provider, ProviderId } from '../settings';
-import { forgetUnlisted, isFresh, noteTries, readCopies, readTries, saveCopies, standsIn, triedLately } from './copies';
-import type { Copy } from './copies';
+import { closeTries, forgetCopies, isFresh, noteTries, openTries, readCopies, saveCopies, standsIn, triedLately } from './copies';
+import type { Copy, RunTries } from './copies';
 import { setStop, stoppedBy } from './gates';
 import { openMeter, roomFor, stampSends } from './meter';
 import { placesToFetch } from './places';
@@ -150,13 +150,13 @@ function openMeteoFailed(result: ReadingResult | undefined): boolean {
   return result.ok === true ? Boolean(result.seriesStatus) : Boolean(result.openMeteo && result.openMeteo.ok === false);
 }
 
-/** Who a run asks, which a place's last ask is kept under, and every place the run serves. */
+/** Who a run asks, which a place's last ask is kept under, and the run's asks. */
 interface Asking {
   provider: Provider;
   key: string;
   print: string;
   paid: boolean;
-  listed: string[];
+  tries: RunTries;
 }
 
 /**
@@ -196,7 +196,7 @@ async function fetchDue(context: ServeContext, asking: Asking, keysRead: boolean
     return results;
   }
 
-  noteTries(storage, asked.map((place) => place.key), asking.listed, { provider: provider.id, print, atMs: nowMs });
+  noteTries(storage, asking.tries, asked.map((place) => place.key), { provider: provider.id, print, atMs: nowMs });
 
   const answers = await fetchFrom(provider.id, asked, key, context.request, stampSends(storage, keyed ? [om, keyed] : [om], clock));
 
@@ -227,7 +227,7 @@ async function fetchFailover(context: ServeContext, asking: Asking, places: Weat
     return results;
   }
 
-  noteTries(context.storage, asked.map((place) => place.key), asking.listed, { provider: asking.provider.id, print: asking.print, atMs: nowMs });
+  noteTries(context.storage, asking.tries, asked.map((place) => place.key), { provider: asking.provider.id, print: asking.print, atMs: nowMs });
 
   const answers = await fetchFrom('openmeteo', asked, '', context.request, stampSends(context.storage, [om], clock));
 
@@ -255,9 +255,16 @@ export async function weatherAnswer(context: ServeContext, startMs: number, aske
   const paid = provider.paidSetting ? settings[provider.paidSetting] === true : false;
   // a value the page never offered, such as 0 or a negative, would fetch on every run or almost never
   const refreshMs = Number(REFRESH_MINUTES.includes(String(settings.REFRESH)) ? settings.REFRESH : DEFAULTS.REFRESH) * MINUTE_MS;
-  const [{ places, error }, units] = await Promise.all([placesToFetch(context.pebble, settings), pebbleAppUnits(context.pebble, overridesOf(settings))]);
+  const [{ places, error, gone, anyGone }, units] = await Promise.all([placesToFetch(context.pebble, settings), pebbleAppUnits(context.pebble, overridesOf(settings))]);
 
   if (places.length === 0) {
+    // a place switched back on after every one was off is fetched straight away
+    // with nothing that can be gone, what is kept is left unread
+    if (anyGone) {
+      forgetCopies(context.storage, gone);
+      closeTries(context.storage, openTries(context.storage, gone));
+    }
+
     throw new Error(error ? `the places could not be read, ${error}` : 'no place is switched on with coordinates');
   }
 
@@ -275,13 +282,22 @@ export async function weatherAnswer(context: ServeContext, startMs: number, aske
     }
   });
 
-  const asking: Asking = { provider, key, print, paid, listed: places.map((place) => place.key) };
-  const tries = forgetUnlisted(context.storage, readTries(context.storage), asking.listed);
+  const asking: Asking = { provider, key, print, paid, tries: openTries(context.storage, gone) };
   // a place asked for inside the Refresh Interval waits for it, even when that ask failed
-  const due = places.filter((place) => (!copies[place.key] || !isFresh(copies[place.key], refreshMs, nowMs)) && !triedLately(tries[place.key], provider.id, print, refreshMs, nowMs));
+  const due = places.filter((place) => (!copies[place.key] || !isFresh(copies[place.key], refreshMs, nowMs)) && !triedLately(asking.tries.asks[place.key], provider.id, print, refreshMs, nowMs));
   const results = due.length > 0 ? await fetchDue(context, asking, keysRead, due, nowMs) : {};
   const served: Record<string, { instance: SourceInstance; fetchedMs: number }> = {};
   const keep: Record<string, Copy> = {};
+
+  // a place missing from this run keeps its copy, as it keeps its last ask, so it is served from it
+  // once it is back, unless the wearer switched it off or removed it
+  const runKeys = new Set(places.map((place) => place.key));
+
+  Object.keys(kept).forEach((placeKey) => {
+    if (!runKeys.has(placeKey) && !gone(placeKey)) {
+      keep[placeKey] = kept[placeKey];
+    }
+  });
 
   const serveFirst = (place: WeatherPlace, options: Option[]): boolean => {
     for (const option of options) {
@@ -343,6 +359,7 @@ export async function weatherAnswer(context: ServeContext, startMs: number, aske
   }
 
   saveCopies(context.storage, keep);
+  closeTries(context.storage, asking.tries);
 
   const instances = places.filter((place) => served[place.key]).map((place) => served[place.key].instance);
 

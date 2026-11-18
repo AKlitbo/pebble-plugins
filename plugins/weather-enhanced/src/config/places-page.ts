@@ -15,39 +15,27 @@
  * as it loaded, and adding stays off, so a save then keeps the wearer's saved choices rather than
  * wiping them.
  *
- * Add a Place reads the pick from the framework's location search, which fires `change` as each pick
- * lands, again once the pick's time zone lookup answers, and when typing clears the pick. The Name is
- * filled from the pick only when the picked place itself changes, so a name the wearer typed after the
- * tap stays. An added place keeps its coordinates to four decimals under an id made once, here.
+ * The hidden `PLACES` row holds the Places to Fetch a Weather Enhanced 1.0.0 save carries. A save
+ * replaces every setting, so the row rides through each one until the list holds a Pebble app place.
+ * The list then carries First Location Only itself, and the row is emptied.
+ *
+ * Add a Place reads the pick from the framework's location search, which fires `change` once as each
+ * pick lands, since the row takes no time zone, and again when typing clears the pick. Each pick fills
+ * the Name, which the wearer can then change. Add sends the place to the plugin, which checks it,
+ * rounds its coordinates, and trims its name the way it reads every saved place, and the page adds the
+ * entry it hands back. A place the plugin turns away is never added, and the note says so, so nothing
+ * is saved that the plugin would drop on its next read. The id is made once, here.
+ *
+ * A Pebble app place the read gives no coordinates, such as the current location with no fix, is
+ * marked on its row and left out of the count, since a run skips it until it has a fix.
  *
  * Clay writes this into the page as text and runs it there, so it reaches nothing outside itself: no
- * imports and no module-scope constants. The message, the row ids, and the caps ride in on the list's
- * text row's `moduleOptions`.
+ * imports but its types, which compile away, and no module-scope constants. The message, the row ids,
+ * the caps, and the decimals ride in on the list's text row's `moduleOptions`, and that row is found as
+ * the one carrying them.
  */
 
-/** The bits of a Clay row this reaches. */
-interface PageRow {
-  config: { moduleOptions?: PlacesOptions };
-  $element: HTMLElement[];
-  get(): unknown;
-  set(value: unknown): void;
-  hide(): void;
-  on(event: string, handler: () => void): void;
-}
-
-/** The bits of the Clay config page this reaches. */
-interface ClayPage {
-  EVENTS: { AFTER_BUILD: string };
-  on(event: string, handler: () => void): void;
-  getItemById(id: string): PageRow | undefined;
-  getItemByMessageKey(messageKey: string): PageRow | undefined;
-}
-
-/** The page's bridge to the plugin, as the Pebble app gives a settings page. */
-interface PageBridge {
-  addEventListener(name: string, listener: (event: { target: string }) => void): void;
-  sendMessage(target: string, message: unknown): Promise<unknown>;
-}
+import type { ClayPage, PluginPageBridge } from '../../paf/ts/plugin-app/page-types';
 
 /** What the list's text row hands the page code. */
 export interface PlacesOptions {
@@ -57,6 +45,8 @@ export interface PlacesOptions {
   listKey: string;
   /** The Pebble App Places switch. */
   useAppKey: string;
+  /** The hidden row that carries a saved Places to Fetch until the list holds a Pebble app place. */
+  oldPlacesKey: string;
   /** The most places watchfaces get. */
   most: number;
   /** The most places the wearer can add. */
@@ -65,6 +55,8 @@ export interface PlacesOptions {
   addedPrefix: string;
   /** The longest name an added place keeps. */
   nameMax: number;
+  /** The plugin's message that checks a place before it is added. */
+  addMessage: string;
   /** The location search row Add a Place searches with. */
   searchId: string;
   /** The Name row. */
@@ -86,13 +78,15 @@ interface Place {
   lon?: number;
   /** A Pebble app place this read did not have, kept in the list with no row. */
   unread: boolean;
+  /** Whether a run can fetch it now. A Pebble app place with no coordinates, such as the current location with no fix, cannot. */
+  located: boolean;
 }
 
 /** The page code Clay runs with the page as `this`. */
 export default function placesPage(this: ClayPage): void {
   this.on(this.EVENTS.AFTER_BUILD, () => {
-    const holder = this.getItemById('we-places');
-    const options = holder && holder.config.moduleOptions;
+    const holder = this.getAllItems().find((item) => Boolean(item.config && item.config.moduleOptions && typeof (item.config.moduleOptions as Partial<PlacesOptions>).placesMessage === 'string'));
+    const options = holder && (holder.config.moduleOptions as PlacesOptions);
     const store = options && this.getItemByMessageKey(options.listKey);
 
     if (!holder || !options || !store) {
@@ -100,17 +94,22 @@ export default function placesPage(this: ClayPage): void {
     }
 
     const useApp = this.getItemByMessageKey(options.useAppKey);
+    const oldPlaces = this.getItemByMessageKey(options.oldPlacesKey);
     const search = this.getItemById(options.searchId);
     const nameRow = this.getItemById(options.nameId);
     const addButton = this.getItemById(options.addId);
     const addNote = this.getItemById(options.addNoteId);
-    const bridge = (window as unknown as { Pebble?: PageBridge }).Pebble;
+    const bridge = (window as unknown as { Pebble?: PluginPageBridge }).Pebble;
     let places: Place[] | null = null;
     let readError = false;
     // what this last wrote to the row, which tells its own writes from the framework's load
     let written = '';
 
     store.hide();
+
+    if (oldPlaces) {
+      oldPlaces.hide();
+    }
 
     // Clay's base sheet gives every button a 12rem minimum width and an auto margin, which pushes the
     // rows past the screen. each rule here outweighs Clay's by a class, so it wins whichever sheet
@@ -173,15 +172,27 @@ export default function placesPage(this: ClayPage): void {
     // the Pebble app's rows hide while Pebble App Places is off, and an unread one never has a row
     const shownPlaces = (): Place[] => (places || []).filter((place) => !place.unread && (place.added || appOn()));
 
+    // a list holding a Pebble app place carries First Location Only itself, so the PLACES row is emptied
+    const dropOldPlaces = (): void => {
+      if (oldPlaces && (places || []).some((place) => !place.added) && String(oldPlaces.get() || '') !== '') {
+        oldPlaces.set('');
+      }
+    };
+
     const write = (): void => {
       written = JSON.stringify((places || []).map((place) => (place.added ? { id: place.id, on: place.on, name: place.name, lat: place.lat, lon: place.lon } : { id: place.id, app: true, on: place.on })));
       store.set(written);
+      dropOldPlaces();
     };
 
+    // a place with no fix right now is skipped by the run, so it does not count toward the top places
     const tally = (): void => {
-      const on = shownPlaces().filter((place) => place.on).length;
+      const switchedOn = shownPlaces().filter((place) => place.on);
+      const on = switchedOn.filter((place) => place.located).length;
 
-      if (on === 0) {
+      if (on === 0 && switchedOn.length > 0) {
+        say(count, 'we-count', 'No place that is on has a fix right now, so watchfaces get no weather from Weather Enhanced until one does.', true);
+      } else if (on === 0) {
         say(count, 'we-count', 'No place is on, so watchfaces get no weather from Weather Enhanced.', true);
       } else if (on > options.most) {
         say(count, 'we-count', on + ' places on. Watchfaces get only the top ' + options.most + '.', true);
@@ -268,6 +279,8 @@ export default function placesPage(this: ClayPage): void {
         // the tag tells the current location apart when the Pebble app gives it a city's name
         if (place.added) {
           row.appendChild(make('span', 'we-tag', 'Added Here'));
+        } else if (!place.located) {
+          row.appendChild(make('span', 'we-tag', 'No Fix Right Now'));
         } else if (place.current && place.name) {
           row.appendChild(make('span', 'we-tag', 'Current Location'));
         }
@@ -313,39 +326,36 @@ export default function placesPage(this: ClayPage): void {
         return null;
       }
 
-      const fits = (value: unknown, range: number): value is number => typeof value === 'number' && isFinite(value) && Math.abs(value) <= range;
+      // the plugin checks the range when the place is added, so the page only needs two numbers
+      const finite = (value: unknown): value is number => typeof value === 'number' && isFinite(value);
 
-      return pick && fits(pick.lat, 90) && fits(pick.lon, 180) ? { label: typeof pick.label === 'string' ? pick.label : '', lat: pick.lat, lon: pick.lon } : null;
+      return pick && finite(pick.lat) && finite(pick.lon) ? { label: typeof pick.label === 'string' ? pick.label : '', lat: pick.lat, lon: pick.lon } : null;
     };
 
     // the geocoder labels a pick with its region and country, and the town alone reads best on a watch
     const shortName = (label: string): string => label.split(',')[0].trim();
 
+    // six letters after the prefix every time. a random number can write out short in base 36, so
+    // letters are added until there are enough
     const newId = (): string => {
       let id = '';
 
       while (!id || (places || []).some((place) => place.id === id)) {
-        id = options.addedPrefix + Math.random().toString(36).slice(2, 8);
+        let letters = '';
+
+        while (letters.length < 6) {
+          letters += Math.random().toString(36).slice(2);
+        }
+
+        id = options.addedPrefix + letters.slice(0, 6);
       }
 
       return id;
     };
 
-    // the place the Name was last filled from. the search fires change a second time for the same
-    // place when its time zone lookup lands, and that must not write over a name typed in between
-    let filledFrom = '';
-
     if (search) {
       search.on('change', () => {
         const pick = pickOf();
-        const place = pick ? [pick.label, pick.lat, pick.lon].join('|') : '';
-
-        if (place === filledFrom) {
-          return;
-        }
-
-        // a cleared pick forgets the place too, so picking it again fills the Name again
-        filledFrom = place;
 
         if (pick && nameRow) {
           nameRow.set(shortName(pick.label).slice(0, options.nameMax));
@@ -353,13 +363,18 @@ export default function placesPage(this: ClayPage): void {
       });
     }
 
+    // one add at a time, so a second tap before the plugin answers cannot add the place twice
+    let adding = false;
+
+    const refuseAdd = (): void => note('Weather Enhanced could not add that place. Pick it from the search list again.');
+
     if (addButton) {
       addButton.on('click', () => {
         const pick = pickOf();
         const typed = nameRow ? String(nameRow.get() || '').trim() : '';
         const name = (typed || (pick ? shortName(pick.label) : '')).slice(0, options.nameMax);
 
-        if (!places) {
+        if (!places || !bridge || adding) {
           return;
         }
 
@@ -373,24 +388,37 @@ export default function placesPage(this: ClayPage): void {
           return;
         }
 
-        places.push({ id: newId(), name, current: false, on: true, added: true, lat: Math.round(pick.lat * 10000) / 10000, lon: Math.round(pick.lon * 10000) / 10000, unread: false });
-        write();
-        draw();
+        adding = true;
 
-        if (search) {
-          search.set('');
-        }
+        bridge.sendMessage('plugin', { type: options.addMessage, place: { id: newId(), on: true, name, lat: pick.lat, lon: pick.lon } }).then((reply) => {
+          const entry = reply && typeof reply === 'object' ? (reply as { entry?: { id?: unknown; on?: unknown; name?: unknown; lat?: unknown; lon?: unknown } | null }).entry : null;
 
-        // setting the search fires nothing, so the place is forgotten here for the next pick to fill
-        filledFrom = '';
+          adding = false;
 
-        if (nameRow) {
-          nameRow.set('');
-        }
+          if (!places || !entry || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.lat !== 'number' || typeof entry.lon !== 'number') {
+            refuseAdd();
+            return;
+          }
 
-        if (places.filter((place) => place.added).length < options.mostAdded) {
-          note('Added ' + name + '. Save to send it to watchfaces.');
-        }
+          places.push({ id: entry.id, name: entry.name, current: false, on: entry.on !== false, added: true, lat: entry.lat, lon: entry.lon, unread: false, located: true });
+          write();
+          draw();
+
+          if (search) {
+            search.set('');
+          }
+
+          if (nameRow) {
+            nameRow.set('');
+          }
+
+          if (places.filter((place) => place.added).length < options.mostAdded) {
+            note('Added ' + entry.name + '. Save to send it to watchfaces.');
+          }
+        }).catch(() => {
+          adding = false;
+          refuseAdd();
+        });
       });
     }
 
@@ -409,6 +437,11 @@ export default function placesPage(this: ClayPage): void {
         write();
       }
     });
+
+    // the framework's load can set the PLACES row after the answer emptied it, so it is emptied again
+    if (oldPlaces) {
+      oldPlaces.on('change', dropOldPlaces);
+    }
 
     fitAdding();
 
@@ -441,9 +474,8 @@ export default function placesPage(this: ClayPage): void {
           lat: typeof place.lat === 'number' ? place.lat : undefined,
           lon: typeof place.lon === 'number' ? place.lon : undefined,
           unread: place.unread === true,
+          located: place.added === true || place.located !== false,
         }));
-        // an added place without coordinates would serve nothing, so it is dropped rather than saved
-        places = places.filter((place) => !place.added || (place.lat !== undefined && place.lon !== undefined && place.name));
         readError = typeof answer.error === 'string' && answer.error !== '';
         write();
         draw();

@@ -7,19 +7,22 @@
  * code writes there is what every watchface gets. What is pinned is that the row always holds what the
  * wearer sees: the order and switches the plugin sent, each move and switch as it happens, each place
  * added or removed, and the wearer's saved choices left alone for the Pebble app places the plugin could
- * not read. The framework's load can land after the plugin's answer, so that order is pinned too.
+ * not read or a read left out. The framework's load can land after the plugin's answer, so that order
+ * is pinned too. The hidden `PLACES` row has to ride through a save until the list holds the Pebble
+ * app's places, and a place with no fix has to be marked and left out of the count, as the run skips it.
  *
  * Add a Place is pinned from the pick to the saved entry: the name filled from the pick, the wearer's
- * own name kept, the coordinates cut to four decimals, and the cap of five added places. The location
- * search fires change again for the same place once its time zone lookup lands, and when typing clears
- * the pick, so both of those are pinned against the fake search row too.
+ * own name kept, the plugin's check that rounds the coordinates and turns away a place it would drop,
+ * a full id every time, and the cap of five added places. Typing that clears the pick fires change, so
+ * that is pinned against the fake search row too.
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import type { ClayConfigItem } from '../../paf/ts/clay/types';
 import type { SourceEnvelope } from '../../paf/ts/plugin-sources/types';
 import { IMPERIAL_UNITS, appPlace, bridgeWith } from '../plugin/testing/fake-bridge';
 import { clayConfig } from './index';
+import type { ClayPage } from '../../paf/ts/plugin-app/page-types';
 import placesPage from './places-page';
 import type { PlacesOptions } from './places-page';
 
@@ -30,9 +33,6 @@ const APP_LIST: SourceEnvelope = {
 
 /** What the location search holds after a pick of Wakefield, Quebec. */
 const WAKEFIELD = JSON.stringify({ lat: 45.638912, lon: -75.925678, label: 'Wakefield, Quebec, Canada', offset: -300, tz: 'America/Toronto' });
-
-/** Wakefield as the search holds it the moment it is tapped, before the time zone lookup answers. */
-const WAKEFIELD_TAPPED = JSON.stringify({ lat: 45.638912, lon: -75.925678, label: 'Wakefield, Quebec, Canada', offset: 0, tz: '' });
 
 /** What the location search holds after a pick of Chelsea, Quebec. */
 const CHELSEA = JSON.stringify({ lat: 45.5, lon: -75.8, label: 'Chelsea, Quebec, Canada', offset: -300, tz: 'America/Toronto' });
@@ -97,23 +97,25 @@ async function openPage(list: string, readPlaces: () => Promise<SourceEnvelope> 
   document.head.innerHTML = '';
   document.body.innerHTML = '<div id="holder"></div><div id="note"><p></p></div>';
 
-  const holderConfig = rows(clayConfig).find((item) => item.id === 'we-places') as ClayConfigItem;
+  const holderConfig = rows(clayConfig).find((item) => typeof (item.moduleOptions as Partial<PlacesOptions> | undefined)?.placesMessage === 'string') as ClayConfigItem;
   const options = holderConfig.moduleOptions as PlacesOptions;
   const store = fakeRow(list, true);
   const useApp = fakeRow(settings.USE_APP_PLACES !== false, true);
+  const oldPlaces = fakeRow(settings.PLACES ?? '', true);
   const search = fakeRow('', false);
   const name = fakeRow('', true);
   const add = fakeRow(undefined, false);
   const note = fakeRow('', false, document.getElementById('note') as HTMLElement);
   const holder = { ...fakeRow('', false, document.getElementById('holder') as HTMLElement), config: { moduleOptions: options } };
-  const byId: Record<string, unknown> = { 'we-places': holder, [options.searchId]: search, [options.nameId]: name, [options.addId]: add, [options.addNoteId]: note };
-  const byKey: Record<string, unknown> = { [options.listKey]: store, [options.useAppKey]: useApp };
+  const byId: Record<string, unknown> = { [options.searchId]: search, [options.nameId]: name, [options.addId]: add, [options.addNoteId]: note };
+  const byKey: Record<string, unknown> = { [options.listKey]: store, [options.useAppKey]: useApp, [options.oldPlacesKey]: oldPlaces };
   const ask = bridgeWith(async () => IMPERIAL_UNITS, { readPlaces, settings });
   let built: () => void = () => undefined;
   let ready: (event: { target: string }) => void = () => undefined;
   const page = {
     EVENTS: { AFTER_BUILD: 'after-build' },
     on: (_event: string, run: () => void) => void (built = run),
+    getAllItems: () => [useApp, holder, store, oldPlaces, search, name, add, note],
     getItemById: (id: string) => byId[id] as ReturnType<typeof fakeRow> | undefined,
     getItemByMessageKey: (key: string) => byKey[key] as ReturnType<typeof fakeRow> | undefined,
   };
@@ -123,7 +125,8 @@ async function openPage(list: string, readPlaces: () => Promise<SourceEnvelope> 
     sendMessage: (_target: string, message: unknown) => ask(message),
   };
 
-  placesPage.call(page);
+  // the stand-in has only the parts of the Clay page the page code reaches
+  placesPage.call(page as unknown as ClayPage);
   built();
   ready({ target: 'plugin' });
   await settle();
@@ -143,6 +146,10 @@ async function openPage(list: string, readPlaces: () => Promise<SourceEnvelope> 
     tap: (label: string) => (document.querySelector(`[aria-label="${label}"]`) as HTMLElement).click(),
     /** The framework setting the row from the saved settings. */
     load: (next: string) => store.set(next),
+    /** The hidden row carrying a saved Places to Fetch, as a save would send it. */
+    oldPlaces: () => oldPlaces.value,
+    /** The framework setting that row from the saved settings. */
+    loadOldPlaces: (next: string) => oldPlaces.set(next),
     /** The wearer flipping Pebble App Places. */
     useApp: (on: boolean) => useApp.set(on),
     /** The wearer picking a place from the search list, as the location search sets its value and fires change. */
@@ -159,7 +166,11 @@ async function openPage(list: string, readPlaces: () => Promise<SourceEnvelope> 
     typeName: (value: string) => void (name.value = value),
     name: () => name.value,
     search: () => search.value,
-    add: () => add.fire('click'),
+    /** The wearer tapping Add, with the plugin's check of the place let land. */
+    add: async () => {
+      add.fire('click');
+      await settle();
+    },
     /** Whether the Add a Place rows are hidden. */
     addHidden: () => [search, name, add].map((row) => row.$element[0].style.display === 'none'),
   };
@@ -248,6 +259,69 @@ describe('the place list', () => {
     expect(result).toEqual([list, ['Cottage'], "Could not read the Pebble app's weather list, so its places stay as they were saved. Check that Weather Enhanced is allowed Location."]);
   });
 
+  /** A current location with no fix is skipped by every run until it has one, so counting it promised the wearer a place faces never got. */
+  test('marks a place with no fix and leaves it out of the count', async () => {
+    const noFix = { instances: [appPlace('here', '', undefined, true), appPlace('toronto', 'Toronto', [43.65, -79.38])] };
+    const page = await openPage('[]', async () => noFix);
+
+    const result = [page.shown(), page.count()];
+
+    expect(result).toEqual([
+      [
+        ['Current Location', 'No Fix Right Now', true],
+        ['Toronto', undefined, true],
+      ],
+      '1 place on.',
+    ]);
+  });
+
+  /**
+   * The Pebble app can list a place it is still setting up, a key with nothing else yet. A row with no
+   * name at all gave the wearer nothing to tell it by, and counting it promised weather faces never got.
+   */
+  test('names a place with nothing but its key and leaves it out of the count', async () => {
+    const page = await openPage('[]', async () => ({ instances: [{ instanceId: 'setting-up' }, appPlace('toronto', 'Toronto', [43.65, -79.38])] }));
+
+    const result = [page.shown(), page.count()];
+
+    expect(result).toEqual([
+      [
+        ['Unnamed Place', 'No Fix Right Now', true],
+        ['Toronto', undefined, true],
+      ],
+      '1 place on.',
+    ]);
+  });
+
+  /** With only a place with no fix on, faces get nothing from the plugin, and the page must not count that as a place. */
+  test('says no place on has a fix when the only one on has none', async () => {
+    const noFix = { instances: [appPlace('here', '', undefined, true), appPlace('toronto', 'Toronto', [43.65, -79.38])] };
+    const page = await openPage(saved([['here', true], ['toronto', false]]), async () => noFix);
+
+    const result = page.count();
+
+    expect(result).toBe('No place that is on has a fix right now, so watchfaces get no weather from Weather Enhanced until one does.');
+  });
+
+  /**
+   * A read that left out a saved place, as the Pebble app can for a current location with no fix,
+   * dropped its entry, so the next save lost the wearer's order and its off switch.
+   */
+  test('keeps a saved place the read left out in the row, with no row of its own', async () => {
+    const list = saved([['here', false], ['toronto', true]]);
+    const page = await openPage(list, async () => ({ instances: [appPlace('toronto', 'Toronto', [43.65, -79.38])] }));
+
+    const result = [page.stored(), page.names()];
+
+    expect(result).toEqual([
+      [
+        ['here', false],
+        ['toronto', true],
+      ],
+      ['Toronto'],
+    ]);
+  });
+
   /** Saving with every place off leaves faces with no weather at all, so the page says so before the wearer saves. */
   test('warns when every place is switched off', async () => {
     const page = await openPage(saved([['toronto', false], ['here', false], ['london', true]]));
@@ -256,6 +330,57 @@ describe('the place list', () => {
     const result = page.count();
 
     expect(result).toBe('No place is on, so watchfaces get no weather from Weather Enhanced.');
+  });
+});
+
+describe('Places to Fetch from before the list', () => {
+  /** The list carries First Location Only once it holds the Pebble app's places, so the old setting can go with that save. */
+  test("clears the old setting once the list holds the Pebble app's places", async () => {
+    const page = await openPage('[]', async () => APP_LIST, { PLACE_LIST: '[]', PLACES: 'first' });
+
+    const result = [page.stored(), page.oldPlaces()];
+
+    expect(result).toEqual([
+      [
+        ['toronto', true],
+        ['here', false],
+        ['london', false],
+      ],
+      '',
+    ]);
+  });
+
+  /** The load landing after the answer would bring the old setting back over a list that already carries it. */
+  test('clears the old setting again when the load lands after the answer', async () => {
+    const page = await openPage('[]', async () => APP_LIST, { PLACE_LIST: '[]', PLACES: 'first' });
+
+    page.loadOldPlaces('first');
+    const result = page.oldPlaces();
+
+    expect(result).toBe('');
+  });
+
+  /**
+   * A save replaces every setting. With the Pebble app's list empty for a moment the page saves an empty
+   * list, and dropping First Location Only then gave the wearer up to five places on the next run.
+   */
+  test('keeps First Location Only through a save with an empty list', async () => {
+    const page = await openPage('[]', async () => ({ instances: [] }), { PLACE_LIST: '[]', PLACES: 'first' });
+
+    const result = [page.raw(), page.oldPlaces()];
+
+    expect(result).toEqual(['[]', 'first']);
+  });
+
+  /** A list holding only an added place says nothing about the Pebble app's places, so First Location Only must ride along. */
+  test('keeps First Location Only when a place is added to an empty list', async () => {
+    const page = await openPage('[]', async () => ({ instances: [] }), { PLACE_LIST: '[]', PLACES: 'first' });
+
+    page.pick(WAKEFIELD);
+    await page.add();
+    const result = [page.entries().map((entry) => entry.name), page.oldPlaces()];
+
+    expect(result).toEqual([['Wakefield'], 'first']);
   });
 });
 
@@ -307,7 +432,7 @@ describe('Add a Place', () => {
     const page = await openPage('[]');
 
     page.pick(WAKEFIELD);
-    page.add();
+    await page.add();
     const entries = page.entries();
     const result = [entries.length, entries[3], page.shown()[3], page.search(), page.name()];
 
@@ -320,25 +445,37 @@ describe('Add a Place', () => {
 
     page.pick(WAKEFIELD);
     page.typeName('  The Cottage  ');
-    page.add();
+    await page.add();
     const result = page.entries()[3].name;
 
     expect(result).toBe('The Cottage');
   });
 
   /**
-   * The search fires change a second time for the same place once its time zone lookup answers. Filling
-   * the Name again then wrote the town back over the name the wearer had typed in between.
+   * The plugin drops a saved place whose coordinates are off the globe. Added as it was, such a place
+   * saved, then vanished on the next read with nothing said, so the plugin checks it first.
    */
-  test("keeps the wearer's name when the search fires again for the same place", async () => {
+  test('adds nothing and says so for a pick the plugin turns away', async () => {
     const page = await openPage('[]');
 
-    page.pick(WAKEFIELD_TAPPED);
-    page.typeName('The Cottage');
-    page.pick(WAKEFIELD);
-    const result = page.name();
+    page.pick(JSON.stringify({ lat: 95, lon: -75.9, label: 'Nowhere', offset: 0, tz: '' }));
+    await page.add();
+    const result = [page.entries().length, page.note()];
 
-    expect(result).toBe('The Cottage');
+    expect(result).toEqual([3, 'Weather Enhanced could not add that place. Pick it from the search list again.']);
+  });
+
+  /** A random number can write out short in base 36, which made an id of the prefix alone that a second add would share. */
+  test('makes a full id when the random letters come out short', async () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const page = await openPage('[]');
+
+    page.pick(WAKEFIELD);
+    await page.add();
+    random.mockRestore();
+    const result = page.entries()[3].id;
+
+    expect(result).toBe('own-iiiiii');
   });
 
   /** A new place is a new pick, so its town replaces the name of the place picked before it. */
@@ -362,7 +499,7 @@ describe('Add a Place', () => {
 
     page.pick(WAKEFIELD);
     page.clearPick();
-    page.add();
+    await page.add();
     const result = [page.entries().length, page.note(), page.name()];
 
     expect(result).toEqual([3, 'Pick a place from the search list first.', 'Wakefield']);
@@ -386,7 +523,7 @@ describe('Add a Place', () => {
     const page = await openPage('[]');
 
     page.typeName('Cottage');
-    page.add();
+    await page.add();
     const result = [page.entries().length, page.note()];
 
     expect(result).toEqual([3, 'Pick a place from the search list first.']);

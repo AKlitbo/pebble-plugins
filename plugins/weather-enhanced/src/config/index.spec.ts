@@ -7,7 +7,8 @@
  * phone's plain storage, and a key row shown under the wrong provider is saved where it is never read.
  * The credits under Save are what each provider's terms ask for, so the picked one has to be named.
  * The place list is JSON in a row of its own, which the wearer should never see as text, and Add a
- * Place saves only through it.
+ * Place saves only through it. A Places to Fetch from before the list rides in a hidden row too, since
+ * a save replaces every setting.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -57,11 +58,17 @@ describe('the settings page', () => {
     ]);
   });
 
-  /** A text box of JSON on the page would be the first thing a wearer edits by hand. */
-  test('keeps the place list in a hidden input', () => {
-    const result = [rowOf('PLACE_LIST')?.type, rowOf('PLACE_LIST')?.attributes];
+  /**
+   * A text box of JSON on the page would be the first thing a wearer edits by hand. A save replaces
+   * every setting, so a Places to Fetch with no row would be dropped by the first save.
+   */
+  test('keeps the place list and the old Places to Fetch in hidden inputs', () => {
+    const result = ['PLACE_LIST', 'PLACES'].map((key) => [rowOf(key)?.type, rowOf(key)?.attributes]);
 
-    expect(result).toEqual(['input', { type: 'hidden' }]);
+    expect(result).toEqual([
+      ['input', { type: 'hidden' }],
+      ['input', { type: 'hidden' }],
+    ]);
   });
 
   /** A key out of the secret list lands in plain storage. */

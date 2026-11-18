@@ -109,8 +109,9 @@ export type PlaceEntry = AppPlaceEntry | AddedPlaceEntry;
 
 /**
  * The Places to Fetch value for First Location Only. Weather Enhanced 1.0.0 saved that setting under
- * `PLACES`, and a save that still holds this value reads as only the first place switched on, until
- * the wearer saves the page again.
+ * `PLACES`, and a save that still holds this value reads as only the first Pebble app place switched
+ * on, until the place list is saved with the Pebble app's places in it. The page carries `PLACES` in
+ * a hidden row until then, since a save replaces every setting.
  */
 export const FIRST_PLACE_ONLY = 'first';
 
@@ -123,6 +124,7 @@ export const DEFAULTS = {
   WEATHERAPI_PAID: false,
   USE_APP_PLACES: true,
   PLACE_LIST: '[]',
+  PLACES: '',
   REFRESH: '30',
   TEMPERATURE_UNIT: 'app',
   WIND_UNIT: 'app',
@@ -150,6 +152,9 @@ export const UNITS_MESSAGE = 'weather-enhanced-units';
 
 /** The message the settings page sends the plugin for the place list, the Pebble app's places in the wearer's order. */
 export const PLACES_MESSAGE = 'weather-enhanced-places';
+
+/** The message the settings page sends the plugin with a place to add, which the plugin checks and hands back as it will read it. */
+export const ADD_PLACE_MESSAGE = 'weather-enhanced-add-place';
 
 /** Each unit row, against the name its unit goes by in the framework's weather units. */
 export const UNIT_ROWS = { TEMPERATURE_UNIT: 'temperature', WIND_UNIT: 'windSpeed', PRESSURE_UNIT: 'pressure' } as const;

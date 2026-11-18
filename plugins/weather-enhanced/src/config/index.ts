@@ -5,15 +5,17 @@
  * It runs top to bottom in the order a wearer sets it up: the Data Source with the picked provider's
  * key and Paid Plan, the places, adding a place, the refresh, and the units. The place list is drawn by
  * the page code in places-page.ts into its text row, and kept in a hidden row the framework saves with
- * the rest. Adding a place uses the framework's location search, which the page passes as a component,
- * and its rows have no message key, so only the place list saves what they add. The line about the
+ * the rest. A second hidden row, `PLACES`, holds the Places to Fetch a Weather Enhanced 1.0.0 save
+ * carries, so a save keeps it until the list holds the Pebble app's places. Adding a place uses the
+ * framework's location search, which the page passes as a component, and its rows have no message key,
+ * so only the place list saves what they add. The line about the
  * watch's own Weather app sits above Save, and the credits each picked provider asks for sit under it.
  */
 
 import { combineCustomFns } from '../../paf/ts/clay/custom-fn';
 import locationSearch from '../../paf/ts/clay/location-component';
 import type { ClayConfigItem } from '../../paf/ts/clay/types';
-import { ADDED_PREFIX, APP_UNIT, APP_UNIT_LABEL, DEFAULTS, MOST_ADDED, MOST_PLACES, NAME_MAX, OPEN_METEO, PLACES_MESSAGE, PROVIDERS, REFRESH_MINUTES, UNIT_CHOICES, UNIT_ROWS, UNITS_MESSAGE } from '../settings';
+import { ADDED_PREFIX, ADD_PLACE_MESSAGE, APP_UNIT, APP_UNIT_LABEL, DEFAULTS, MOST_ADDED, MOST_PLACES, NAME_MAX, OPEN_METEO, PLACES_MESSAGE, PROVIDERS, REFRESH_MINUTES, UNIT_CHOICES, UNIT_ROWS, UNITS_MESSAGE } from '../settings';
 import placesPage from './places-page';
 import type { PlacesOptions } from './places-page';
 import weatherPage from './weather-page';
@@ -53,10 +55,12 @@ const PLACES_OPTIONS: PlacesOptions = {
   placesMessage: PLACES_MESSAGE,
   listKey: 'PLACE_LIST',
   useAppKey: 'USE_APP_PLACES',
+  oldPlacesKey: 'PLACES',
   most: MOST_PLACES,
   mostAdded: MOST_ADDED,
   addedPrefix: ADDED_PREFIX,
   nameMax: NAME_MAX,
+  addMessage: ADD_PLACE_MESSAGE,
   searchId: 'we-add-search',
   nameId: 'we-add-name',
   addId: 'we-add',
@@ -93,8 +97,9 @@ export const clayConfig: ClayConfigItem[] = [
       { type: 'heading', defaultValue: 'Places' },
       { type: 'toggle', messageKey: 'USE_APP_PLACES', label: 'Pebble App Places', defaultValue: DEFAULTS.USE_APP_PLACES },
       { type: 'text', defaultValue: "The Pebble app's places are added, renamed, and removed in its weather list.", visibleWhen: { key: 'USE_APP_PLACES', in: [true] } },
-      { type: 'text', id: 'we-places', defaultValue: `Watchfaces get the places switched on here, top first, up to ${MOST_PLACES}. Move a place with its arrows.`, moduleOptions: PLACES_OPTIONS },
+      { type: 'text', defaultValue: `Watchfaces get the places switched on here, top first, up to ${MOST_PLACES}. Move a place with its arrows.`, moduleOptions: PLACES_OPTIONS },
       { type: 'input', messageKey: 'PLACE_LIST', label: 'Place List', defaultValue: DEFAULTS.PLACE_LIST, attributes: { type: 'hidden' } },
+      { type: 'input', messageKey: 'PLACES', label: 'Places to Fetch', defaultValue: DEFAULTS.PLACES, attributes: { type: 'hidden' } },
       { type: 'text', defaultValue: "The watch's own Weather app and the timeline's weather pins keep the Pebble app's list and order, so a place switched off here still shows there, with weather from Pebble. Places added here show only on watchfaces." },
     ],
   },

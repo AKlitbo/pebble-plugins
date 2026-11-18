@@ -13,6 +13,8 @@ import type { QuotaPlan, Stamp } from '../../paf/ts/quota/ledger';
 import { NETWORK_ERROR } from '../../paf/ts/pkjs/request';
 import type { SendHook } from '../../paf/ts/pkjs/request';
 import { READING_WEIGHT as OPEN_METEO_WEIGHT } from '../../paf/ts/weather/providers/openmeteo';
+import { READING_WEIGHT as OWM_WEIGHT } from '../../paf/ts/weather/providers/owm';
+import { READING_WEIGHT as WEATHERAPI_WEIGHT } from '../../paf/ts/weather/providers/weatherapi';
 import { LEDGER_KEY, QUOTA_PLANS } from '../limits';
 import type { ProviderId } from '../settings';
 
@@ -30,8 +32,8 @@ export interface Meter {
   stamps: Stamp[];
 }
 
-// OpenWeatherMap and WeatherAPI.com each count a call as 1, which is their own READING_WEIGHT
-const KEYED_WEIGHT = 1;
+/** What each provider counts one place's reading as, from the framework's providers. */
+const WEIGHTS: Record<ProviderId, number> = { openmeteo: OPEN_METEO_WEIGHT, owm: OWM_WEIGHT, weatherapi: WEATHERAPI_WEIGHT };
 
 /**
  * Opens a provider's ledger for a run.
@@ -59,9 +61,7 @@ export function openMeter(storage: MeterStorage, provider: ProviderId, key: stri
  * @return How many of them fit inside its plan.
  */
 export function roomFor(meter: Meter, places: number, nowMs: number): number {
-  const weight = meter.provider === 'openmeteo' ? OPEN_METEO_WEIGHT : KEYED_WEIGHT;
-
-  return allowance(meter.plan, meter.stamps, { calls: places, weight, paid: !meter.counted }, nowMs).room;
+  return allowance(meter.plan, meter.stamps, { calls: places, weight: WEIGHTS[meter.provider], paid: !meter.counted }, nowMs).room;
 }
 
 /** Stamps a request's calls, or takes them back off, and saves the ledger. */

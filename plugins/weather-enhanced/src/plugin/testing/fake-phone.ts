@@ -2,7 +2,8 @@
  * A stand-in phone for the plugin's specs: the plugin runtime, `localStorage`, and the weather
  * providers' sites, with no network.
  *
- * The Pebble app's Preferences plugin hands back the places it is given. Open-Meteo answers every
+ * The Pebble app's Preferences plugin hands back the places it is given, a place without coordinates
+ * as one with no fix, and the places or a refusal can change between runs. Open-Meteo answers every
  * place in a batch with a reading whose days start on the place's midnight, and a place can be given
  * fewer days. OpenWeatherMap answers each place with a clear sky. Any site can be given an error
  * instead, and every request is recorded.
@@ -16,6 +17,7 @@ import type { RequestFn } from '../../../paf/ts/pkjs/request';
 import { SETTINGS_OPTIONS } from '../../settings';
 import { handlePage } from '../page-bridge';
 import { handleSource } from '../serve';
+import { appPlace } from './fake-bridge';
 
 const HOUR_SECONDS = 60 * 60;
 const DAY_SECONDS = 24 * HOUR_SECONDS;
@@ -126,14 +128,12 @@ export function memoryStorage(): Pick<Storage, 'getItem' | 'setItem'> & { items:
   return { items, getItem: (key) => items.get(key) ?? null, setItem: (key, value) => void items.set(key, value) };
 }
 
+/** A place in the Pebble app's weather list. One left without coordinates has no fix, as the current location can be. */
+export type PhonePlace = Omit<WeatherPlace, 'lat' | 'lon'> & Partial<Pick<WeatherPlace, 'lat' | 'lon'>>;
+
 /** The Preferences plugin's answer listing these places. */
-function placesEnvelope(places: WeatherPlace[]): SourceEnvelope {
-  return {
-    instances: places.map((place): SourceInstance => ({
-      instanceId: place.key,
-      properties: { name: { shortText: { text: place.name } }, latitude: { numericValue: { value: place.lat } }, longitude: { numericValue: { value: place.lon } } },
-    })),
-  };
+function placesEnvelope(places: PhonePlace[]): SourceEnvelope {
+  return { instances: places.map((place) => appPlace(place.key, place.name, place.lat === undefined || place.lon === undefined ? undefined : [place.lat, place.lon], place.current)) };
 }
 
 /** What the plugin answered a run with. */
@@ -156,6 +156,10 @@ export interface FakePhone {
   save(settings: Record<string, unknown>): Promise<void>;
   /** Sends the plugin any message from the page, and hands back its reply. */
   send(message: unknown): Promise<unknown>;
+  /** Changes the Pebble app's weather list for the runs after this. */
+  listPlaces(places: PhonePlace[]): void;
+  /** Has the Pebble app refuse the read of the list with this reason, or read it again when left out. */
+  refusePlaces(reason?: string): void;
 }
 
 /**
@@ -166,8 +170,10 @@ export interface FakePhone {
  * @param options The places, the saved settings, the secret keys, how each site answers, when the clock starts, and a refused read.
  * @return The phone.
  */
-export function fakePhone(options: { places?: WeatherPlace[]; settings?: Record<string, unknown>; keys?: Record<string, string>; sites?: Sites; nowMs?: number; clock?: () => number; refusePlaces?: string } = {}): FakePhone {
+export function fakePhone(options: { places?: PhonePlace[]; settings?: Record<string, unknown>; keys?: Record<string, string>; sites?: Sites; nowMs?: number; clock?: () => number; refusePlaces?: string } = {}): FakePhone {
   let nowMs = options.nowMs ?? NOW_MS;
+  let places = options.places || [TORONTO];
+  let refusal = options.refusePlaces;
   const clock = options.clock || (() => nowMs);
   const storage = memoryStorage();
   const keys = new Map(Object.entries(options.keys || {}));
@@ -183,11 +189,11 @@ export function fakePhone(options: { places?: WeatherPlace[]; settings?: Record<
     subscribeSource: () => undefined,
     refreshSources: () => undefined,
     readSource: async (asking: SourceRequest) => {
-      if (asking.item === 'weather_location' && options.refusePlaces) {
-        throw Object.assign(new Error(options.refusePlaces), { code: options.refusePlaces });
+      if (asking.item === 'weather_location' && refusal) {
+        throw Object.assign(new Error(refusal), { code: refusal });
       }
 
-      return asking.item === 'weather_location' ? placesEnvelope(options.places || [TORONTO]) : { instances: [] };
+      return asking.item === 'weather_location' ? placesEnvelope(places) : { instances: [] };
     },
     secureStorage: {
       getItem: async (key: string) => keys.get(key) ?? null,
@@ -224,6 +230,8 @@ export function fakePhone(options: { places?: WeatherPlace[]; settings?: Record<
     save: async (settings) => {
       await configHandler!({ type: SAVE_MESSAGE, settings }, () => undefined);
     },
+    listPlaces: (next) => void (places = next),
+    refusePlaces: (reason) => void (refusal = reason),
   };
 }
 

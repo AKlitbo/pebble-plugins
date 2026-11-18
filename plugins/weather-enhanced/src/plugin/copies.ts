@@ -10,6 +10,10 @@
  * Each place also keeps when it was last asked for, so a provider that failed is not asked again on
  * every run. The Pebble app runs each subscriber every 15 minutes whatever the answer says, so without
  * it a provider down for hours would be asked for every place on every run.
+ *
+ * A place lets go of both only once the wearer switches it off or removes it, so switched back on it is
+ * fetched straight away. A place missing from one run for any other reason, such as the current
+ * location with no fix or every Pebble app place while the read is refused, keeps both.
  */
 
 import type { WeatherReading } from '../../paf/ts/weather/reading';
@@ -95,6 +99,28 @@ export function saveCopies(storage: CopyStorage, copies: Record<string, Copy>): 
   }
 }
 
+/**
+ * Lets go of the copies of places the wearer switched off or removed, for a run that serves nothing
+ * and so keeps no copies of its own. It writes only when there is a copy to let go of.
+ *
+ * @param storage Where the copies are kept, normally `localStorage`.
+ * @param gone Whether a place, by its key, was switched off or removed.
+ */
+export function forgetCopies(storage: CopyStorage, gone: (key: string) => boolean): void {
+  const kept = readCopies(storage);
+  const left: Record<string, Copy> = {};
+
+  Object.keys(kept).forEach((key) => {
+    if (!gone(key)) {
+      left[key] = kept[key];
+    }
+  });
+
+  if (Object.keys(left).length !== Object.keys(kept).length) {
+    saveCopies(storage, left);
+  }
+}
+
 /** How old a copy is, or -1 when the clock was set back past it. */
 function ageOf(copy: Copy, nowMs: number): number {
   const age = nowMs - copy.fetchedMs;
@@ -144,13 +170,16 @@ export interface Try {
   atMs: number;
 }
 
-/**
- * Each place's last ask, by place key.
- *
- * @param storage Where the asks are kept, normally `localStorage`.
- * @return Each ask that reads back as one.
- */
-export function readTries(storage: CopyStorage): Record<string, Try> {
+/** Each place's last ask as a run holds it, read from storage once at the start of the run. */
+export interface RunTries {
+  /** The asks, by place key. */
+  asks: Record<string, Try>;
+  /** Whether the run let go of an ask that storage still holds. */
+  unsaved: boolean;
+}
+
+/** Each place's last ask as kept, and none for anything that does not read back as one. */
+function readTries(storage: CopyStorage): Record<string, Try> {
   const tries: Record<string, Try> = {};
 
   try {
@@ -172,64 +201,64 @@ export function readTries(storage: CopyStorage): Record<string, Try> {
   return tries;
 }
 
-/**
- * Notes that places were just asked for, keeping the asks of the run's other places and letting go
- * of places no longer listed. It is kept as the ask goes out, since the Pebble app can end a run partway.
- *
- * @param storage Where the asks are kept, normally `localStorage`.
- * @param asked The places just asked for.
- * @param listed Every place this run serves.
- * @param tried The provider and key fingerprint asked, and when.
- */
-export function noteTries(storage: CopyStorage, asked: string[], listed: string[], tried: Try): void {
-  const tries = readTries(storage);
-  const kept: Record<string, Try> = {};
-
-  listed.forEach((key) => {
-    if (asked.includes(key)) {
-      kept[key] = tried;
-    } else if (tries[key]) {
-      kept[key] = tries[key];
-    }
-  });
-
+/** Keeps the run's asks in place of every one kept before. */
+function writeTries(storage: CopyStorage, tries: RunTries): void {
   try {
-    storage.setItem(TRIES_KEY, JSON.stringify(kept));
+    storage.setItem(TRIES_KEY, JSON.stringify(tries.asks));
+    tries.unsaved = false;
   } catch (error) {
     console.log(`Weather Enhanced: the asks could not be kept, ${error}`);
   }
 }
 
 /**
- * Lets go of the asks of places this run does not list, such as one the wearer switched off, so the
- * place is asked for straight away once it is back rather than waiting out an ask from before. It
- * writes only when there is an ask to let go of.
+ * Reads each place's last ask for a run, letting go of the places the wearer switched off or removed,
+ * so such a place is asked for straight away once it is back rather than waiting out an ask from
+ * before. A place missing from the run for any other reason keeps its ask. Nothing is written here,
+ * so a run that asks for a place writes the asks only once.
  *
  * @param storage Where the asks are kept, normally `localStorage`.
- * @param tries The asks as this run read them.
- * @param listed Every place this run serves.
- * @return The asks still listed.
+ * @param gone Whether a place, by its key, was switched off or removed.
+ * @return The run's asks.
  */
-export function forgetUnlisted(storage: CopyStorage, tries: Record<string, Try>, listed: string[]): Record<string, Try> {
-  const kept: Record<string, Try> = {};
+export function openTries(storage: CopyStorage, gone: (key: string) => boolean): RunTries {
+  const read = readTries(storage);
+  const asks: Record<string, Try> = {};
 
-  listed.forEach((key) => {
-    if (tries[key]) {
-      kept[key] = tries[key];
+  Object.keys(read).forEach((key) => {
+    if (!gone(key)) {
+      asks[key] = read[key];
     }
   });
 
-  if (Object.keys(kept).length === Object.keys(tries).length) {
-    return tries;
-  }
+  return { asks, unsaved: Object.keys(asks).length !== Object.keys(read).length };
+}
 
-  try {
-    storage.setItem(TRIES_KEY, JSON.stringify(kept));
-  } catch (error) {
-    console.log(`Weather Enhanced: the asks could not be kept, ${error}`);
-  }
+/**
+ * Notes that places were just asked for and keeps the run's asks. It is kept as the ask goes out,
+ * since the Pebble app can end a run partway.
+ *
+ * @param storage Where the asks are kept, normally `localStorage`.
+ * @param tries The run's asks, which take the new ones.
+ * @param asked The places just asked for.
+ * @param tried The provider and key fingerprint asked, and when.
+ */
+export function noteTries(storage: CopyStorage, tries: RunTries, asked: string[], tried: Try): void {
+  asked.forEach((key) => (tries.asks[key] = tried));
+  writeTries(storage, tries);
+}
 
-  return kept;
+/**
+ * Keeps the run's asks at the end of a run that let go of one and has not kept them since. A run that
+ * let go of nothing writes nothing here.
+ *
+ * @param storage Where the asks are kept, normally `localStorage`.
+ * @param tries The run's asks.
+ */
+export function closeTries(storage: CopyStorage, tries: RunTries): void {
+  if (tries.unsaved) {
+    writeTries(storage, tries);
+  }
 }
 
 /**

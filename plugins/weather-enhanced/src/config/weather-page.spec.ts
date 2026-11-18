@@ -9,6 +9,7 @@
 
 import { describe, test, expect } from 'vitest';
 import type { ClayConfigItem } from '../../paf/ts/clay/types';
+import type { ClayPage } from '../../paf/ts/plugin-app/page-types';
 import type { SourceEnvelope } from '../../paf/ts/plugin-sources/types';
 import { IMPERIAL_UNITS, bridgeWith } from '../plugin/testing/fake-bridge';
 import { clayConfig } from './index';
@@ -72,7 +73,8 @@ async function openPage(picks: Record<string, string>, readUnits: () => Promise<
     sendMessage: (_target: string, message: unknown) => (answers ? ask(message) : new Promise(() => undefined)),
   };
 
-  weatherPage.call(page);
+  // the stand-in has only the parts of the Clay page the page code reaches
+  weatherPage.call(page as unknown as ClayPage);
   built();
   ready({ target: 'plugin' });
 
