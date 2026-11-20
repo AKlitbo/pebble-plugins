@@ -25,7 +25,7 @@ const LOOK_AHEAD_LABELS: Record<string, string> = { 1: 'Today', 3: '3 Days', 7: 
 const HIDE_STARTED_LABELS: Record<string, string> = { never: 'Never', 0: 'When They Start', 15: '15 Minutes After', 30: '30 Minutes After', 60: '60 Minutes After' };
 
 /** How the Time Labels select names each of its choices. */
-const TIME_LABEL_NAMES: Record<(typeof TIME_LABEL_CHOICES)[number], string> = { builtIn: 'Match the Pebble App', short: 'Short Labels' };
+const TIME_LABEL_NAMES: Record<(typeof TIME_LABEL_CHOICES)[number], string> = { builtIn: 'Same as the Pebble App (14:30)', short: 'Short (2:30p, Thu, Nov 27)' };
 
 
 /** What the calendar list row hands the page code. */
@@ -98,7 +98,7 @@ function feedSection(slot: 1 | 2): ClayConfigItem {
         type: 'toggle',
         messageKey: observances,
         label: 'Include Observances',
-        description: "Adds days such as Valentine's Day or Mother's Day that aren't days off. Off, the feed has the public holidays alone.",
+        description: "Adds days like Valentine's Day or Mother's Day that aren't days off. Leave it off for just the public holidays.",
         defaultValue: DEFAULTS[observances],
         visibleWhen: [shown, { key: source, in: ['holidays'] }],
       },
@@ -120,7 +120,7 @@ function warning(text: string): string {
 
 export const clayConfig: ClayConfigItem[] = [
   { type: 'heading', defaultValue: 'Calendar Enhanced + iCal' },
-  { type: 'text', defaultValue: "Serves your phone's calendars and up to two iCal links, merged into one agenda, to every watchface that reads calendar plugins." },
+  { type: 'text', defaultValue: "Puts your phone's calendars and up to two iCal links into one agenda for your watchfaces." },
   {
     type: 'section',
     items: [
@@ -130,7 +130,7 @@ export const clayConfig: ClayConfigItem[] = [
       {
         type: 'text',
         id: 'cei-calendars',
-        defaultValue: "Switch a calendar off to keep its events off your watchfaces. The list shows the calendars with events in the next 7 days, since that's all the Pebble app shares. The Pebble app's own calendar switches still decide which calendars it reads and pins to the timeline. Two calendars with the same name share one switch, since the Pebble app only shares the name.",
+        defaultValue: 'Switch a calendar off to keep it off your watchfaces. Only calendars with events this week are listed, and two with the same name share a switch.',
         moduleOptions: CALENDARS_OPTIONS,
         visibleWhen: { key: 'PHONE_CALENDARS', in: [true] },
       },
@@ -147,7 +147,7 @@ export const clayConfig: ClayConfigItem[] = [
         type: 'select',
         messageKey: 'REFRESH',
         label: 'iCal Refresh Interval',
-        description: "How old an iCal feed's copy can get before the plugin fetches it again. A shorter time picks up changes to a feed sooner and uses a little more data. Your phone's calendars stay up to date on their own.",
+        description: 'How often your iCal links are checked for changes. Phone calendars update on their own.',
         defaultValue: DEFAULTS.REFRESH,
         options: REFRESH_MINUTES.map((minutes) => ({ label: minutes === '60' ? '1 Hour' : `${minutes} Minutes`, value: minutes })),
       },
@@ -161,18 +161,18 @@ export const clayConfig: ClayConfigItem[] = [
         type: 'select',
         messageKey: 'LOOK_AHEAD',
         label: 'Look Ahead',
-        description: 'How far ahead the agenda reaches, from today only to a month. A watchface shows as many of these events as it has room for.',
+        description: 'How far ahead events are shown, from today only to a month.',
         defaultValue: DEFAULTS.LOOK_AHEAD,
         options: LOOK_AHEAD_DAYS.map((days) => ({ label: LOOK_AHEAD_LABELS[days], value: days })),
       },
       // the built-in Calendar plugin shares only the next 7 days of the phone's calendars
       // so the note shows for the choices longer than that, while the phone's calendars are shown
-      { type: 'text', defaultValue: warning("Phone calendars only reach a week ahead, since that's all the Pebble app shares. Your iCal feeds use the full Look Ahead."), visibleWhen: [{ key: 'LOOK_AHEAD', in: LOOK_AHEAD_DAYS.filter((days) => Number(days) > 7) }, { key: 'PHONE_CALENDARS', in: [true] }] },
+      { type: 'text', defaultValue: warning('Phone calendars only reach 7 days ahead. iCal links use the full Look Ahead.'), visibleWhen: [{ key: 'LOOK_AHEAD', in: LOOK_AHEAD_DAYS.filter((days) => Number(days) > 7) }, { key: 'PHONE_CALENDARS', in: [true] }] },
       {
         type: 'select',
         messageKey: 'HIDE_STARTED',
         label: 'Hide Events in Progress',
-        description: "Takes a meeting off the agenda once it starts, or once it has been going the time you pick, so your watchface shows what's next rather than what you're already in. All-day events, and anything that runs a day or more, stay until they end.",
+        description: "Hides a meeting once it starts, or after the time you pick, so your watchface shows what's next. All-day and multi-day events stay until they end.",
         defaultValue: DEFAULTS.HIDE_STARTED,
         options: HIDE_STARTED_CHOICES.map((choice) => ({ label: HIDE_STARTED_LABELS[choice], value: choice })),
       },
@@ -180,47 +180,47 @@ export const clayConfig: ClayConfigItem[] = [
         type: 'toggle',
         messageKey: 'ALL_DAY_EVENTS',
         label: 'Show All-Day Events',
-        description: 'Turn this off to leave out all-day events, such as reminders, birthdays, or a working from home status, so your next meeting comes first.',
+        description: 'Turn off to hide birthdays, holidays, and other all-day events.',
         defaultValue: DEFAULTS.ALL_DAY_EVENTS,
       },
       // the built-in Calendar plugin reads whether the wearer is going from the phone but sends none of it
-      { type: 'text', defaultValue: "The next three only reach events from your iCal feeds. The Pebble app doesn't share whether you're going to an event in your phone's calendars." },
+      { type: 'text', defaultValue: "These three only work on iCal links, since the Pebble app doesn't share them for phone calendars." },
       {
         type: 'toggle',
         messageKey: 'HIDE_DECLINED',
         label: 'Hide Declined Events',
-        description: "Leaves out an invitation you've said no to. It needs the email addresses you're invited by.",
+        description: 'Hides invitations you said no to. It needs your email addresses.',
         defaultValue: DEFAULTS.HIDE_DECLINED,
-      },
-      {
-        type: 'input',
-        messageKey: 'EMAIL_ADDRESSES',
-        label: 'Your Email Addresses',
-        description: 'The addresses your invitations come to, separated by commas, so the plugin can find your own answer among the guests.',
-        defaultValue: DEFAULTS.EMAIL_ADDRESSES,
-        // a plain text box, so a list is never checked as one address, still with the email keyboard
-        attributes: { type: 'text', inputmode: 'email', autocapitalize: 'off', autocorrect: 'off', placeholder: 'you@example.com' },
-        visibleWhen: { key: 'HIDE_DECLINED', in: [true] },
       },
       {
         type: 'toggle',
         messageKey: 'HIDE_TENTATIVE',
         label: 'Hide Tentative Events',
-        description: 'Leaves out an event marked tentative.',
+        description: 'Hides invitations you answered Maybe to, and events the organizer marked tentative. Your Maybe needs your email addresses.',
         defaultValue: DEFAULTS.HIDE_TENTATIVE,
+      },
+      {
+        type: 'input',
+        messageKey: 'EMAIL_ADDRESSES',
+        label: 'Your Email Addresses',
+        description: 'The email addresses your invitations go to, separated by commas, so the switches above can find your answer.',
+        defaultValue: DEFAULTS.EMAIL_ADDRESSES,
+        // a plain text box, so a list is never checked as one address, still with the email keyboard
+        attributes: { type: 'text', inputmode: 'email', autocapitalize: 'off', autocorrect: 'off', placeholder: 'you@example.com' },
+        visibleWhen: { anyOf: [{ key: 'HIDE_DECLINED', in: [true] }, { key: 'HIDE_TENTATIVE', in: [true] }] },
       },
       {
         type: 'toggle',
         messageKey: 'HIDE_FREE',
         label: 'Hide Free Events',
-        description: 'Leaves out a timed event that shows you as free, such as a reminder or a hold. All-day events stay, since holiday calendars mark every holiday as free. Show All-Day Events covers those.',
+        description: 'Hides timed events that show you as free, like holds. All-day events stay, since holiday calendars mark every holiday as free.',
         defaultValue: DEFAULTS.HIDE_FREE,
       },
       {
         type: 'input',
         messageKey: 'HIDE_TITLED',
         label: 'Hide Events Titled',
-        description: 'Leaves out an event from any calendar whose title has one of these words, separated by commas, such as Lunch, Focus Time, Canceled:. A word matches from the start of a word in the title, whatever its case, so Lunch hides Team Lunch but not Brunch.',
+        description: 'Hides events with any of these words in the title, separated by commas, such as Lunch, Focus Time.',
         defaultValue: DEFAULTS.HIDE_TITLED,
         attributes: { type: 'text', autocapitalize: 'off', placeholder: 'Lunch, Focus Time' },
       },
@@ -234,14 +234,14 @@ export const clayConfig: ClayConfigItem[] = [
         type: 'toggle',
         messageKey: 'TIMELINE_PINS',
         label: 'Pin iCal Events to the Timeline',
-        description: "Puts the events from your iCal feeds on your watch's timeline, as the Pebble app does with your phone's calendars. The pins change only while a watchface or complication is showing your calendar, since that's when the plugin runs. The Pebble app asks you to allow Timeline.",
+        description: "Adds your iCal events to the watch's timeline, like the Pebble app does for phone calendars. Pins update while a watchface is showing your calendar.",
         defaultValue: DEFAULTS.TIMELINE_PINS,
       },
       {
         type: 'select',
         messageKey: 'PIN_REMINDER',
         label: 'Reminder',
-        description: 'When a pinned event reminds you before it starts. All-day events get no reminder.',
+        description: 'How long before an event to remind you. All-day events get no reminder.',
         defaultValue: DEFAULTS.PIN_REMINDER,
         options: PIN_REMINDER_CHOICES.map((choice) => ({ label: PIN_REMINDER_NAMES[choice], value: choice })),
         visibleWhen: { key: 'TIMELINE_PINS', in: [true] },
@@ -256,7 +256,7 @@ export const clayConfig: ClayConfigItem[] = [
         type: 'select',
         messageKey: 'TIME_LABELS',
         label: 'Time Labels',
-        description: "How an event's start and end read on a watchface that shows them as text. Match the Pebble App reads 14:30 whatever the day, as the built-in Calendar plugin does. Short Labels follow the 12 or 24 hour clock picked in the Pebble app, and name the day for an event that isn't today, such as Thu or Nov 27. Most watchfaces show the time their own way and look the same with either.",
+        description: "How event times are written on watchfaces that show them as text. Same as the Pebble App always shows the time, like 14:30, even for an event next week. Short shows the time for today's events, like 2:30p on a 12-hour clock, and the day for later ones, like Thu or Nov 27. Many watchfaces write times their own way and ignore this.",
         defaultValue: DEFAULTS.TIME_LABELS,
         options: TIME_LABEL_CHOICES.map((choice) => ({ label: TIME_LABEL_NAMES[choice], value: choice })),
       },
