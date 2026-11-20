@@ -10,6 +10,7 @@ Every watchface that reads calendar plugins reads it the way it reads the Pebble
 - Up to two more calendars from an iCal link, such as a Google Calendar, a team schedule, or a sports fixture list, or from a country's public holidays in one pick.
 - One agenda, soonest first, with each event shown once and its notes carried as the built-in carries them.
 - A Look Ahead you set, from today only to a month.
+- Your iCal events on the watch's timeline, with a reminder before each.
 - Time labels that can follow your 12 or 24 hour clock and name the day, for watchfaces that show them.
 - Filters to hide meetings already underway, to leave out all-day events, to leave out the iCal events you declined, marked tentative, or marked free, and to leave out events by words in their titles.
 - An iCal Refresh Interval you set, for how old a feed's copy can get.
@@ -38,6 +39,8 @@ Open Calendar Enhanced + iCal's settings in the Pebble app.
 | Hide Tentative Events | Leaves out an iCal event marked tentative, off by default. |
 | Hide Free Events | Leaves out a timed iCal event that shows you as free, off by default. All-day events stay, since holiday calendars mark every holiday as free. |
 | Hide Events Titled | Leaves out an event from any calendar whose title has one of the words you list, separated by commas, such as `Lunch, Focus Time, Canceled:`. Empty by default. A word matches from the start of a word in the title, whatever its case, so `Lunch` hides Team Lunch but not Brunch. |
+| Pin iCal Events to the Timeline | Puts the events from your iCal feeds on your watch's timeline, off by default. Your phone's own events are pinned by the Pebble app already, so they, and any feed event your phone also holds, get no second pin, even from a phone calendar switched off here. With Show Phone Calendars off the phone isn't read, so a feed event it also holds gets a pin. A pin follows the agenda and its filters, apart from Hide Events in Progress, so a meeting keeps its pin while it runs. A feed event that moves, goes, or is filtered off loses its pin, and one that has simply ended keeps it. All-day events are pinned for their whole day with no reminder. At most 50 pins are kept, the soonest first. |
+| Reminder | When a pinned event reminds you before it starts: None, When It Starts, or 5, 10, 15, 30, or 60 minutes before, 15 minutes by default. |
 | Time Labels | How an event's start and end read on a watchface that shows them as text. Match the Pebble App, the default, reads `14:30` whatever the day, as the built-in does. Short Labels follow the 12 or 24 hour clock picked in the Pebble app, as `2:30p`, and name the day for an event that isn't today, such as `Thu` within the week or `Nov 27` after it, in your watch's language where its names fit, and in English where they don't. |
 
 > [!WARNING]
@@ -54,7 +57,7 @@ Each link covers one calendar, so a second Google calendar goes in the other fee
 
 ## Permissions
 
-The plugin asks for two. Internet fetches the iCal links, and Calendar reads the phone's calendars through the built-in plugin. Neither is required, so refusing one leaves the other half serving.
+The plugin asks for three. Internet fetches the iCal links, and Calendar reads the phone's calendars through the built-in plugin. Timeline puts your iCal events on the timeline, only with Pin iCal Events to the Timeline on. None is required, so refusing one leaves the rest working.
 
 ## Data Source
 
@@ -113,6 +116,7 @@ The iCal links go to `Pebble.secureStorage`, which the phone encrypts and only t
 
 * The runtime has no timers, so a feed's host that never answers is only cut off where the runtime offers `AbortSignal.timeout`, after 8 seconds.
 * While every read of the phone times out, the phone's part of the agenda is the last good read, for up to three hours, so an event changed on the phone since then shows as it was. After three hours the phone's part is empty until a read comes through.
+* The pins only change while a watchface or a complication is reading your calendar, since that's when the Pebble app runs the plugin. Turning the pins off clears them when you save. The Pebble app never says whether a pin went in, so pins asked for while Timeline isn't allowed go in once you allow it.
 * A meeting Hide Events in Progress takes off can stay on a face until the Pebble app next runs the plugin, up to five minutes, since the Pebble app runs it on its own schedule.
 
 ## Building

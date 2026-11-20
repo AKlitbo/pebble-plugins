@@ -9,10 +9,12 @@
 
 import { describe, test, expect } from 'vitest';
 import type { PluginPebble, SourceRequest } from '../../paf/ts/plugin-app/runtime';
-import { SETTINGS_KEY } from '../../paf/ts/plugin-app/settings';
+import { SAVE_MESSAGE, SETTINGS_KEY } from '../../paf/ts/plugin-app/settings';
 import type { SourceEnvelope } from '../../paf/ts/plugin-sources/types';
 import { CALENDARS_MESSAGE } from '../settings';
+import { mergeAgenda } from './agenda';
 import { handlePage } from './page-bridge';
+import { syncPins } from './pins';
 
 // Wednesday 4 November 2026, 12:00 in Toronto
 const NOW_MS = Date.UTC(2026, 10, 4, 17);
@@ -26,8 +28,11 @@ const WORK: SourceEnvelope = {
 function bridgeWith(saved: Record<string, unknown>, locked = false) {
   const items = new Map<string, string>([[SETTINGS_KEY, JSON.stringify(saved)]]);
   const read: SourceRequest[] = [];
+  const pins = new Map<string, unknown>();
   let handler: ((message: unknown, respond: (reply: unknown) => void) => void | Promise<void>) | null = null;
   const pebble = {
+    insertTimelinePin: (pin: { id: string }) => void pins.set(pin.id, pin),
+    deleteTimelinePin: (id: string) => void pins.delete(id),
     registerConfigHandler: (registered: typeof handler) => void (handler = registered),
     readSource: async (request: SourceRequest) => {
       read.push(request);
@@ -43,10 +48,14 @@ function bridgeWith(saved: Record<string, unknown>, locked = false) {
 
         return null;
       },
+      setItem: async () => undefined,
+      removeItem: async () => undefined,
     },
   } as unknown as PluginPebble;
 
-  handlePage(pebble, { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => void items.set(key, value), removeItem: (key) => void items.delete(key) }, () => NOW_MS);
+  const storage = { getItem: (key: string) => items.get(key) ?? null, setItem: (key: string, value: string) => void items.set(key, value), removeItem: (key: string) => void items.delete(key) };
+
+  handlePage(pebble, storage, () => NOW_MS);
 
   const ask = async (message: unknown) => {
     let reply: unknown = null;
@@ -56,7 +65,7 @@ function bridgeWith(saved: Record<string, unknown>, locked = false) {
     return reply;
   };
 
-  return { ask, read };
+  return { ask, read, pins, pebble, storage };
 }
 
 describe('the calendars ask', () => {
@@ -87,5 +96,19 @@ describe('a message the plugin does not know', () => {
     const result = await ask({ type: 'something-else' });
 
     expect(result).toEqual({ error: 'the plugin does not know that message' });
+  });
+});
+
+describe('a save that turns the pins off', () => {
+  /** Nothing may read the calendar for hours, so waiting for the next run would leave the pins on the timeline. */
+  test('deletes the pins there and then', async () => {
+    const { ask, pins, pebble, storage } = bridgeWith({ TIMELINE_PINS: true });
+
+    await syncPins(pebble, storage, mergeAgenda([], [{ source: 'feed1', events: [{ startEpoch: NOW_MS / 1000 + 3600, endEpoch: NOW_MS / 1000 + 7200, allDay: false, title: 'Standup', location: '' }] }], NOW_MS / 1000, {}, undefined, 200), { on: true, reminderMinutes: null, nowMs: NOW_MS });
+    await ask({ type: SAVE_MESSAGE, settings: { TIMELINE_PINS: false } });
+
+    const result = pins.size;
+
+    expect(result).toBe(0);
   });
 });

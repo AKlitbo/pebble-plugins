@@ -11,6 +11,7 @@ All notable changes to Calendar Enhanced + iCal are recorded here, following [Ke
 - Added Public Holidays as a Source for either feed, with 38 countries to pick from. The feed takes the country's holiday name unless you've named it, and Include Observances adds days such as Valentine's Day that aren't days off.
 - Added a switch for each of your phone's calendars, so a calendar can show on your timeline without showing on your watchfaces. The list shows the calendars with events in the next 7 days, and any you've switched off.
 - Added a Hide Events Titled box, which keeps events whose titles have any of the words you list, such as Lunch, Focus Time, or Canceled:, off your watch.
+- Added a Pin iCal Events to the Timeline switch, off by default, which puts your iCal feeds' events on your watch's timeline with a reminder you pick. The Pebble app asks you to allow Timeline the first time. The pins change only while a watchface or complication is showing your calendar.
 - Added a Time Labels setting for watchfaces that show an event's time as text. Short Labels read 2:30p on a 12-hour clock, and Thu or Nov 27 for an event on another day. Match the Pebble App, the default, keeps the built-in's 14:30.
 - Added a status under each iCal feed on the settings page, showing when it was last fetched, how many events it gave, and its last error, such as a timeout or a site the Pebble app hasn't allowed.
 

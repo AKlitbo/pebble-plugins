@@ -5,6 +5,7 @@
  * page's ask for each feed's status, which the page shows under the feed. A status is only ever when
  * the feed was fetched, how many events it gave, and the kind of its last failure, never the link. It
  * also answers the page's ask for the phone's calendars, with the ones the saved settings switch off.
+ * A save that turns Pin iCal Events to the Timeline off deletes the pins there and then.
  */
 
 import { handleSettings, readSettings } from '../../paf/ts/plugin-app/settings';
@@ -14,6 +15,8 @@ import { CALENDARS_MESSAGE, SETTINGS_OPTIONS, STATUS_MESSAGE, hiddenCalendars, s
 import { feedStatus } from './feeds';
 import type { FeedStatus, FeedStorage } from './feeds';
 import { phoneCalendarNames } from './phone';
+import { syncPins } from './pins';
+import type { PinStorage } from './pins';
 import type { PhoneStorage } from './phone';
 import { feedOf, readAll } from './serve';
 
@@ -63,7 +66,7 @@ export async function phoneCalendars(pebble: PluginPebble, storage: SettingsStor
  * @param storage Where the settings, the copies, the statuses, and the phone's read are kept, normally `localStorage`.
  * @param clock Reads the time now, normally `Date.now`.
  */
-export function handlePage(pebble: PluginPebble, storage: SettingsStorage & FeedStorage & PhoneStorage, clock: () => number = Date.now): void {
+export function handlePage(pebble: PluginPebble, storage: SettingsStorage & FeedStorage & PhoneStorage & PinStorage, clock: () => number = Date.now): void {
   handleSettings(SETTINGS_OPTIONS, pebble, storage, {
     // a message of any other type goes unanswered here, and the framework answers it with its error
     onMessage: async (type, _message, respond) => {
@@ -71,6 +74,12 @@ export function handlePage(pebble: PluginPebble, storage: SettingsStorage & Feed
         respond(await feedStatuses(pebble, storage));
       } else if (type === CALENDARS_MESSAGE) {
         respond(await phoneCalendars(pebble, storage, clock()));
+      }
+    },
+    // turning the pins off takes them off the timeline straight away, since no run may come while nothing reads the calendar
+    onSaved: async (before, after) => {
+      if (switchOn(before, 'TIMELINE_PINS') && !switchOn(after, 'TIMELINE_PINS')) {
+        await syncPins(pebble, storage, [], { on: false, reminderMinutes: null, nowMs: clock() });
       }
     },
   });

@@ -11,7 +11,8 @@
  * agenda's filters, how long after its start a timed event leaves it, whether all-day events show,
  * whether the feeds' declined, tentative, and free events show, and which titles stay off. The email addresses are how a
  * feed's guest list says which guest is the wearer. The time labels are how each event's start and end
- * read as text.
+ * read as text. The pins are whether the feeds' events go on the timeline, and how long before a
+ * pinned event starts its reminder shows.
  */
 
 import type { SettingsOptions } from '../paf/ts/plugin-app/settings';
@@ -43,6 +44,8 @@ export const DEFAULTS = {
   HIDE_FREE: false,
   HIDE_TITLED: '',
   TIME_LABELS: 'builtIn',
+  TIMELINE_PINS: false,
+  PIN_REMINDER: '15',
 };
 
 /** The settings the page saves as a switch, on or off. */
@@ -88,6 +91,27 @@ export type FeedSource = (typeof FEED_SOURCES)[number];
  */
 export function feedSourceOf(value: unknown): FeedSource {
   return value === 'holidays' ? 'holidays' : 'ical';
+}
+
+/**
+ * The Reminder choices for a pinned event, as the page offers them: none, at the start, or the minutes
+ * before it.
+ */
+export const PIN_REMINDER_CHOICES = ['none', '0', '5', '10', '15', '30', '60'];
+
+/**
+ * The minutes before a pinned event's start that its reminder shows, from the saved Reminder.
+ *
+ * Clay saves a select as text, so the value is matched against the choices as text. Anything else,
+ * such as settings saved with no Reminder in them, reads as the page's default.
+ *
+ * @param value The saved Reminder.
+ * @return The minutes, or null for no reminder.
+ */
+export function pinReminderMinutes(value: unknown): number | null {
+  const choice = PIN_REMINDER_CHOICES.includes(String(value)) ? String(value) : DEFAULTS.PIN_REMINDER;
+
+  return choice === 'none' ? null : Number(choice);
 }
 
 /** The message the settings page sends to ask for each feed's status. */

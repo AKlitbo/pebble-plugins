@@ -8,7 +8,8 @@
   "configPage": "config.html",
   "usesPermissions": [
     { "name": "Internet", "reason": "To fetch your iCal links", "required": false },
-    { "name": "Calendar", "reason": "To merge your phone's calendars with your iCal links", "required": false }
+    { "name": "Calendar", "reason": "To merge your phone's calendars with your iCal links", "required": false },
+    { "name": "Timeline", "reason": "To pin your iCal events to the timeline", "required": false }
   ],
   "plugin": {
     "description": "Your phone's calendars and up to two iCal links, merged into one agenda.",

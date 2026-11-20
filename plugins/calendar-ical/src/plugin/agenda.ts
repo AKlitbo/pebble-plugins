@@ -20,7 +20,6 @@
 import type { CalendarEvent } from '../../paf/ts/calendar/ical';
 import { horizonFor, upcomingWindow } from '../../paf/ts/calendar/window';
 import type { HorizonOptions } from '../../paf/ts/calendar/window';
-import { matchesKeyword } from '../../paf/ts/calendar/keywords';
 import { fingerprint } from '../../paf/ts/pkjs/fingerprint';
 
 /** The most events the agenda serves a reader that asks for no number. */
@@ -49,8 +48,8 @@ export interface AgendaFilters {
   hideTentative?: boolean;
   /** Whether timed events marked free leave the agenda. */
   hideFree?: boolean;
-  /** The keywords whose titles leave the agenda, as `parseKeywords` gives them. None when left out. */
-  hideTitled?: readonly string[];
+  /** Says whether a title is one Hide Events Titled leaves out, prepared once a run with `keywordMatcher`. None when left out. */
+  hidesTitle?: (title: string) => boolean;
 }
 
 /** A day in seconds, the shortest an event runs for Hide Events in Progress to leave it alone. */
@@ -81,7 +80,7 @@ function passesFilters(event: CalendarEvent, nowSeconds: number, filters: Agenda
     return false;
   }
 
-  if (filters.hideTitled && filters.hideTitled.length > 0 && matchesKeyword(event.title, filters.hideTitled)) {
+  if (filters.hidesTitle && filters.hidesTitle(event.title)) {
     return false;
   }
 

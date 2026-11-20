@@ -23,7 +23,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { DEFAULTS, emailAddresses, feedSourceOf, hiddenCalendars, hideStartedMinutes, lookAheadDays, switchOn, timeLabelStyle } from './settings';
+import { DEFAULTS, emailAddresses, feedSourceOf, hiddenCalendars, hideStartedMinutes, lookAheadDays, pinReminderMinutes, switchOn, timeLabelStyle } from './settings';
 import type { SwitchKey } from './settings';
 
 describe('lookAheadDays', () => {
@@ -115,6 +115,27 @@ describe('feedSourceOf', () => {
     const result = feedSourceOf(value);
 
     expect(result).toBe('ical');
+  });
+});
+
+describe('pinReminderMinutes', () => {
+  /** Each choice on the page has to reach the pins as the minutes it names, and None as no reminder at all. */
+  test.each([
+    ['none', null],
+    ['0', 0],
+    ['15', 15],
+    ['60', 60],
+  ])('reads the choice %s as %s', (value, minutes) => {
+    const result = pinReminderMinutes(value);
+
+    expect(result).toBe(minutes);
+  });
+
+  /** A stray saved value must give the page's own default, not a reminder the page never offered. */
+  test.each([undefined, null, '', '7', 'junk'])('reads %j as 15 minutes', (value) => {
+    const result = pinReminderMinutes(value);
+
+    expect(result).toBe(15);
   });
 });
 

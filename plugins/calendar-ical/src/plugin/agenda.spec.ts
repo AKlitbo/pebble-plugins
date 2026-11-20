@@ -28,6 +28,7 @@
 
 import { describe, test, expect } from 'vitest';
 import type { CalendarEvent } from '../../paf/ts/calendar/ical';
+import { keywordMatcher } from '../../paf/ts/calendar/keywords';
 import { MAX_EVENTS, mergeAgenda, nextChange } from './agenda';
 import type { AgendaFilters } from './agenda';
 
@@ -403,7 +404,7 @@ describe('the ids', () => {
 describe('Hide Events Titled', () => {
   /** The words have to reach the phone's events and the feeds' alike, or a phone's Lunch blocks still crowd out the next meeting. */
   test("drops the phone's and the feeds' events whose titles match, and keeps the rest", () => {
-    const result = filtered([event('Team Lunch', 1), event('Dentist', 2)], [event('Canceled: Standup', 3), event('Brunch', 4)], { hideTitled: ['lunch', 'canceled:'] });
+    const result = filtered([event('Team Lunch', 1), event('Dentist', 2)], [event('Canceled: Standup', 3), event('Brunch', 4)], { hidesTitle: keywordMatcher('Lunch, Canceled:') });
 
     expect(result).toEqual(['Dentist', 'Brunch']);
   });
@@ -413,7 +414,7 @@ describe('Hide Events Titled', () => {
     const lunches = Array.from({ length: 5 }, (_, index) => event(`Lunch ${index}`, index + 1));
     const upcoming = Array.from({ length: MAX_EVENTS }, (_, index) => event(`Event ${index}`, index + 10));
 
-    const result = filtered([], [...lunches, ...upcoming], { hideTitled: ['lunch'] });
+    const result = filtered([], [...lunches, ...upcoming], { hidesTitle: keywordMatcher('lunch') });
 
     expect([result.length, result[0]]).toEqual([MAX_EVENTS, 'Event 0']);
   });

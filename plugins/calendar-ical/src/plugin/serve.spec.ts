@@ -31,6 +31,7 @@ import { describe, test, expect } from 'vitest';
 import type { PluginPebble, SourceRequest, SourceResponder } from '../../paf/ts/plugin-app/runtime';
 import { SETTINGS_KEY } from '../../paf/ts/plugin-app/settings';
 import type { SourceEnvelope, SourceInstance } from '../../paf/ts/plugin-sources/types';
+import type { TimelinePin } from '../../paf/ts/plugin-app/timeline';
 import { ANSWER_MS, agendaLimit, handleSource } from './serve';
 
 // Wednesday 4 November 2026, 12:00 in Toronto
@@ -87,6 +88,8 @@ function phoneWith(saved: Record<string, unknown>) {
     calendar: PHONE_UPDATE as SourceEnvelope | Error,
     preferences: Object.assign(new Error('PERMISSION_DENIED'), { code: 'PERMISSION_DENIED' }) as SourceEnvelope | Error,
     preferencesRead: 0,
+    pins: new Map<string, TimelinePin>(),
+    pinsAtAnswer: -1,
   };
 }
 
@@ -114,6 +117,8 @@ async function run(phone: ReturnType<typeof phoneWith>, secrets: Record<string, 
 
       return answerOf(phone.calendar);
     },
+    insertTimelinePin: (pin: TimelinePin) => void phone.pins.set(pin.id, pin),
+    deleteTimelinePin: (id: string) => void phone.pins.delete(id),
     secureStorage: {
       getItem: async (key: string) => {
         if (secrets === 'locked') {
@@ -127,7 +132,13 @@ async function run(phone: ReturnType<typeof phoneWith>, secrets: Record<string, 
   const answers: Array<{ validUntilMs?: number; instances: SourceInstance[] } | string> = [];
 
   handleSource({ pebble, storage: phone.storage, fetchLink: async (url) => (phone.fetched.push(url), feed) }, () => nowMs);
-  await handler!(request, { data: (envelope) => void answers.push(envelope), error: (code) => void answers.push(code) });
+  await handler!(request, {
+    data: (envelope) => {
+      phone.pinsAtAnswer = phone.pins.size;
+      answers.push(envelope);
+    },
+    error: (code) => void answers.push(code),
+  });
 
   return answers;
 }
@@ -669,5 +680,77 @@ describe('Public Holidays naming and the calendar switches', () => {
     const result = shown(answers);
 
     expect(result).toEqual(['Dentist (Work)', 'Standup (Team)']);
+  });
+});
+
+describe('the timeline pins', () => {
+  /** The switch has to reach the pins from the saved settings, with the reminder picked, and only for the feed's own events. */
+  test("pins the feed's events and not the phone's with the switch on", async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true, FEED1_ON: true, FEED1_NAME: 'Team', TIMELINE_PINS: true, PIN_REMINDER: '30' });
+
+    await run(phone, TEAM_LINK);
+
+    const result = [...phone.pins.values()].map((pin) => [pin.layout.title, pin.reminders?.[0]?.time]);
+
+    expect(result).toEqual([['Standup', '2026-11-05T14:30:00.000Z']]);
+  });
+
+  /** A wearer updating has no switch saved, and must get no pins they never asked for. */
+  test('pins nothing from settings saved without the switch', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team' });
+
+    await run(phone, TEAM_LINK);
+
+    const result = phone.pins.size;
+
+    expect(result).toBe(0);
+  });
+
+  /** What is pinned must not hang on how many events a reader asked for, or two faces would fight over the pins. */
+  test('pins past what a reader asked for', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true, FEED1_ON: true, FEED1_NAME: 'Team', TIMELINE_PINS: true });
+
+    await run(phone, TEAM_LINK, NOW_MS, FEED, { category: 'calendar', item: 'event', limit: 1 });
+
+    const result = [...phone.pins.values()].map((pin) => pin.layout.title);
+
+    expect(result).toEqual(['Standup']);
+  });
+});
+
+describe('the timeline pins and the agenda', () => {
+  /** The Pebble app ends the plugin's session once it has the answer, so a pin sent after it may never go. */
+  test('pins before it answers', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', TIMELINE_PINS: true });
+
+    await run(phone, TEAM_LINK);
+
+    const result = phone.pinsAtAnswer;
+
+    expect(result).toBe(1);
+  });
+
+  /** The Pebble app pins a hidden phone calendar's events itself, so a feed copy pinned here would show twice. */
+  test('pins no feed event the phone also holds, even from a calendar switched off', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true, HIDDEN_CALENDARS: JSON.stringify(['Work']), FEED1_ON: true, FEED1_NAME: 'Team', TIMELINE_PINS: true });
+    const dentist = feedOf({ title: 'Dentist', start: '20261105T140000Z', end: '20261105T150000Z' });
+
+    await run(phone, TEAM_LINK, NOW_MS, dentist);
+
+    const result = phone.pins.size;
+
+    expect(result).toBe(0);
+  });
+
+  /** A meeting in progress is still on the wearer's day, and its pin must not vanish when it starts. */
+  test('keeps the pin of a meeting in progress under Hide Events in Progress', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', TIMELINE_PINS: true, HIDE_STARTED: '0' });
+    // 11:30 to 12:30 on Wednesday in Toronto, half an hour in
+    const running = feedOf({ title: 'Review', start: '20261104T163000Z', end: '20261104T173000Z' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, running);
+    const result = [shown(answers), [...phone.pins.values()].map((pin) => pin.layout.title)];
+
+    expect(result).toEqual([[], ['Review']]);
   });
 });

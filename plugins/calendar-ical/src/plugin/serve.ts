@@ -6,14 +6,15 @@
  * the result in the built-in Calendar plugin's shapes. The phone's read and each fetch can take a few
  * seconds, and a run has 20, so none of them waits on another. It serves as many events as the reader
  * asks for, up to 200, and 20 to a reader that names no number. Under Short Labels it also reads the
- * wearer's clock and locale from the Pebble app's Preferences plugin, beside the rest.
+ * wearer's clock and locale from the Pebble app's Preferences plugin, beside the rest. Before it
+ * answers it brings the timeline pins for the feeds' events in line with the agenda.
  *
  * An answer is good for the gap between the Pebble app's runs, or until the next event in it ends or
  * Hide Events in Progress takes it off, or until the phone's next midnight, whichever comes first. A reader that honours the expiry then
  * never keeps an event that has gone for the rest of the gap.
  */
 
-import { parseKeywords } from '../../paf/ts/calendar/keywords';
+import { keywordMatcher } from '../../paf/ts/calendar/keywords';
 import { readSettings } from '../../paf/ts/plugin-app/settings';
 import type { SettingsStorage } from '../../paf/ts/plugin-app/settings';
 import { eventInstance } from '../../paf/ts/plugin-app/calendar';
@@ -25,12 +26,14 @@ import { phoneDayNumber, phoneMidnight } from '../../paf/ts/pkjs/phone-clock';
 import type { PhoneOffset } from '../../paf/ts/pkjs/phone-clock';
 import type { SourceInstance } from '../../paf/ts/plugin-sources/types';
 import { holidayCalendar, holidayLink, isAutomaticName } from '../holidays';
-import { DEFAULTS, SETTINGS_OPTIONS, emailAddresses, feedSourceOf, hiddenCalendars, hideStartedMinutes, lookAheadDays, switchOn, timeLabelStyle } from '../settings';
+import { DEFAULTS, SETTINGS_OPTIONS, emailAddresses, feedSourceOf, hiddenCalendars, hideStartedMinutes, lookAheadDays, pinReminderMinutes, switchOn, timeLabelStyle } from '../settings';
 import { MAX_EVENTS, mergeAgenda, nextChange } from './agenda';
 import { feedEvents } from './feeds';
 import type { Feed, FeedStorage, FetchText } from './feeds';
 import { phoneEvents, refusePhoneCopy } from './phone';
 import type { PhoneStorage } from './phone';
+import { syncPins } from './pins';
+import type { PinStorage } from './pins';
 
 /** How long an answer is good for, the gap between the Pebble app's runs. */
 export const ANSWER_MS = 300 * 1000;
@@ -62,7 +65,7 @@ export interface AgendaAnswer {
 /** What a run reads from, which a spec stands in for. */
 export interface ServeContext {
   pebble: PluginPebble;
-  storage: SettingsStorage & FeedStorage & PhoneStorage;
+  storage: SettingsStorage & FeedStorage & PhoneStorage & PinStorage;
   fetchLink: FetchText;
   /** Reads the phone's offset, passed only by a spec that stands the phone in another zone. */
   offsetAt?: PhoneOffset;
@@ -174,12 +177,22 @@ export async function agendaAnswer(context: ServeContext, nowMs: number, limit =
     hideDeclined: switchOn(settings, 'HIDE_DECLINED'),
     hideTentative: switchOn(settings, 'HIDE_TENTATIVE'),
     hideFree: switchOn(settings, 'HIDE_FREE'),
-    hideTitled: parseKeywords(typeof settings.HIDE_TITLED === 'string' ? settings.HIDE_TITLED : ''),
+    hidesTitle: keywordMatcher(typeof settings.HIDE_TITLED === 'string' ? settings.HIDE_TITLED : ''),
   };
   // a phone calendar switched off goes before the merge, so a feed holding the same event still shows it
   const hidden = new Set(hiddenCalendars(settings.HIDDEN_CALENDARS));
   const shownPhone = phone.filter((event) => !event.calendar || !hidden.has(event.calendar));
-  const agenda = mergeAgenda(shownPhone, [{ source: 'feed1', events: feed1 }, { source: 'feed2', events: feed2 }], nowSeconds, { days, offsetAt }, filters, limit);
+  // the ids are given in order, so the reader's share keeps the same ids as the whole
+  const whole = mergeAgenda(shownPhone, [{ source: 'feed1', events: feed1 }, { source: 'feed2', events: feed2 }], nowSeconds, { days, offsetAt }, filters, SOURCE_LIMIT_MAX);
+  const agenda = whole.slice(0, limit);
+
+  // the pins follow their own agenda. it has every phone event, hidden calendars included, so a feed event
+  // the phone also holds is never pinned beside the Pebble app's own pin, and no Hide Events in Progress,
+  // so a meeting keeps its pin while it runs
+  const pinAgenda = mergeAgenda(phone, [{ source: 'feed1', events: feed1 }, { source: 'feed2', events: feed2 }], nowSeconds, { days, offsetAt }, { ...filters, hideStartedAfter: null }, SOURCE_LIMIT_MAX);
+
+  await syncPins(pebble, storage, pinAgenda, { on: switchOn(settings, 'TIMELINE_PINS'), reminderMinutes: pinReminderMinutes(settings.PIN_REMINDER), nowMs });
+
   // every event still on the agenda leaves after now, so the earlier time is never in the past
   const change = nextChange(agenda, hideStartedAfter);
   // midnight moves the window on a day and turns tomorrow's labels into today's, so no answer outlasts it

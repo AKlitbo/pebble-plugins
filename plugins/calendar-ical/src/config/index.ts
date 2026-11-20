@@ -9,7 +9,7 @@ import { CALLOUT_BADGE, CALLOUT_BOX } from '../../paf/ts/clay/callout-style';
 import { combineCustomFns } from '../../paf/ts/clay/custom-fn';
 import hiddenStore from '../../paf/ts/clay/hidden-store-component';
 import { HOLIDAY_CALENDARS, automaticNames } from '../holidays';
-import { CALENDARS_MESSAGE, DEFAULTS, FEED_SOURCES, HIDE_STARTED_CHOICES, LOOK_AHEAD_DAYS, REFRESH_MINUTES, STATUS_MESSAGE, TIME_LABEL_CHOICES } from '../settings';
+import { CALENDARS_MESSAGE, DEFAULTS, FEED_SOURCES, HIDE_STARTED_CHOICES, LOOK_AHEAD_DAYS, PIN_REMINDER_CHOICES, REFRESH_MINUTES, STATUS_MESSAGE, TIME_LABEL_CHOICES } from '../settings';
 import type { FeedSource } from '../settings';
 import holidaysPage from './holidays-page';
 import type { HolidaysOptions } from './holidays-page';
@@ -41,6 +41,9 @@ function holidayNames(): Record<string, string> {
 
   return names;
 }
+
+/** How the Reminder select names each of its choices. */
+const PIN_REMINDER_NAMES: Record<string, string> = { none: 'None', 0: 'When It Starts', 5: '5 Minutes Before', 10: '10 Minutes Before', 15: '15 Minutes Before', 30: '30 Minutes Before', 60: '1 Hour Before' };
 
 /** How the Source select names each of its choices. */
 const FEED_SOURCE_NAMES: Record<FeedSource, string> = { ical: 'iCal Link', holidays: 'Public Holidays' };
@@ -220,6 +223,28 @@ export const clayConfig: ClayConfigItem[] = [
         description: 'Leaves out an event from any calendar whose title has one of these words, separated by commas, such as Lunch, Focus Time, Canceled:. A word matches from the start of a word in the title, whatever its case, so Lunch hides Team Lunch but not Brunch.',
         defaultValue: DEFAULTS.HIDE_TITLED,
         attributes: { type: 'text', autocapitalize: 'off', placeholder: 'Lunch, Focus Time' },
+      },
+    ],
+  },
+  {
+    type: 'section',
+    items: [
+      { type: 'heading', defaultValue: 'Timeline' },
+      {
+        type: 'toggle',
+        messageKey: 'TIMELINE_PINS',
+        label: 'Pin iCal Events to the Timeline',
+        description: "Puts the events from your iCal feeds on your watch's timeline, as the Pebble app does with your phone's calendars. The pins change only while a watchface or complication is showing your calendar, since that's when the plugin runs. The Pebble app asks you to allow Timeline.",
+        defaultValue: DEFAULTS.TIMELINE_PINS,
+      },
+      {
+        type: 'select',
+        messageKey: 'PIN_REMINDER',
+        label: 'Reminder',
+        description: 'When a pinned event reminds you before it starts. All-day events get no reminder.',
+        defaultValue: DEFAULTS.PIN_REMINDER,
+        options: PIN_REMINDER_CHOICES.map((choice) => ({ label: PIN_REMINDER_NAMES[choice], value: choice })),
+        visibleWhen: { key: 'TIMELINE_PINS', in: [true] },
       },
     ],
   },
