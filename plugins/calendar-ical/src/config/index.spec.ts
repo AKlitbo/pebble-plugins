@@ -8,7 +8,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { clayConfig } from './index';
+import { clayConfig, customClay } from './index';
 import { DEFAULTS, SETTINGS_OPTIONS } from '../settings';
 import type { ClayConfigItem } from '../../paf/ts/clay/types';
 
@@ -33,6 +33,13 @@ describe('the settings page', () => {
     const result = savedRows(clayConfig);
 
     expect(result).toEqual(DEFAULTS);
+  });
+
+  /** A part left out of the page code never runs, so its rows sit on the page doing nothing. */
+  test('runs the calendar list and the holiday names in its page code', () => {
+    const result = String(customClay);
+
+    expect([result.includes('cei-calendars'), result.includes('automatic')]).toEqual([true, true]);
   });
 
   /** A feed link out of the secret list lands in plain storage, and a private link works like a password. */

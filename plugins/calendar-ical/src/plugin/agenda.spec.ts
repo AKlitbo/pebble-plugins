@@ -11,10 +11,16 @@
  * all-day event, or every one of them would go at midnight, nor a timed event a day or longer, which is
  * still current long after it starts. Show All-Day Events has to reach the phone's
  * events and the feeds' alike. Both have to come before the cap, or a hidden event leaves the agenda
- * short.
+ * short. Each of Hide Declined, Tentative, and Free Events has to take off only the events marked its
+ * own way, and Hide Free Events must leave all-day events alone, since holiday feeds mark them free.
  *
  * The answer runs out the next moment the agenda changes on its own, so that moment has to be the
  * soonest of every event's end and every cutoff that applies, or a reader keeps an event that has gone.
+ *
+ * A shared event has to name every source that holds it and carry a feed's marks onto the phone's copy
+ * without changing the phone's own event. Its id must never carry the title.
+ *
+ * Hide Events Titled has to reach every source and come before the cap like the other filters.
  *
  * The usual now is Wednesday 4 November 2026 at 12:00 in Toronto. The window runs to the end of
  * Tuesday 10 November there.
@@ -248,6 +254,35 @@ describe('the filters', () => {
   });
 });
 
+describe('Hide Declined, Tentative, and Free Events', () => {
+  const MARKED = [event('Declined', 1, { declined: true }), event('Tentative', 2, { tentative: true }), event('Free', 3, { free: true }), event('Standup', 4)];
+
+  /** Each switch has to take off the events marked its own way and leave the others, or a wearer loses meetings they are going to. */
+  test.each<[Partial<AgendaFilters>, string[]]>([
+    [{ hideDeclined: true }, ['Tentative', 'Free', 'Standup']],
+    [{ hideTentative: true }, ['Declined', 'Free', 'Standup']],
+    [{ hideFree: true }, ['Declined', 'Tentative', 'Standup']],
+  ])('drops only the marked events under %j', (set, expected) => {
+    const result = filtered([], MARKED, set);
+
+    expect(result).toEqual(expected);
+  });
+
+  /** A wearer who never turns them on must keep every event, marked or not. */
+  test('keeps marked events with the switches off', () => {
+    const result = filtered([], MARKED, {});
+
+    expect(result).toEqual(['Declined', 'Tentative', 'Free', 'Standup']);
+  });
+
+  /** Holiday feeds mark every holiday free, so hiding free all-day events would empty a holiday calendar. */
+  test('keeps an all-day event marked free under Hide Free Events', () => {
+    const result = filtered([], [{ ...allDay('Remembrance Day'), free: true }, event('Free', 1, { free: true })], { hideFree: true });
+
+    expect(result).toEqual(['Remembrance Day']);
+  });
+});
+
 describe('nextChange', () => {
   /** The answer has to run out when the first event goes, not a later one, or that event lingers. */
   test('gives the soonest moment an event on the agenda leaves', () => {
@@ -301,5 +336,85 @@ describe('nextChange', () => {
     const result = nextChange([], 0);
 
     expect(result).toBeNull();
+  });
+});
+
+describe('the sources', () => {
+  /** What goes by where an event came from has to see every source that holds it, or a phone event a feed also holds reads as the feed's alone. */
+  test('names every source that holds each event, the kept copy first', () => {
+    const agenda = mergeAgenda([event('Dentist', 1)], [{ source: 'feed1', events: [event('dentist', 1), event('Standup', 2, { uid: 'standup' })] }, { source: 'feed2', events: [event('Dentist', 1), event('Standup', 2, { uid: 'standup' })] }], NOW);
+
+    const result = agenda.map((entry) => [entry.event.title, entry.sources]);
+
+    expect(result).toEqual([
+      ['Dentist', ['phone', 'feed1', 'feed2']],
+      ['Standup', ['feed1', 'feed2']],
+    ]);
+  });
+});
+
+describe('the marks on a shared event', () => {
+  /** The phone sends no marks, so a meeting declined in a feed and also on the phone would never leave under Hide Declined Events. */
+  test("carries a feed's marks onto the phone's copy, from either feed", () => {
+    const agenda = mergeAgenda([event('Offsite', 1)], [{ source: 'feed1', events: [event('Offsite', 1, { declined: true })] }, { source: 'feed2', events: [event('Offsite', 1, { tentative: true, free: true })] }], NOW);
+
+    const result = agenda.map(({ event: kept }) => [kept.declined, kept.tentative, kept.free]);
+
+    expect(result).toEqual([[true, true, true]]);
+  });
+
+  /** Marks written into the phone's own event would land in the kept phone read and outlive the feed that sent them. */
+  test("leaves the phone's own event without the marks", () => {
+    const phoneEvent = event('Offsite', 1);
+
+    mergeAgenda([phoneEvent], [{ source: 'feed1', events: [event('Offsite', 1, { declined: true })] }], NOW);
+
+    expect(phoneEvent.declined).toBeUndefined();
+  });
+
+  /** Hide Declined Events has to reach the phone's copy once it carries the feed's mark. */
+  test('hides the shared event under Hide Declined Events', () => {
+    const result = filtered([event('Offsite', 1), event('Standup', 2)], [event('Offsite', 1, { declined: true })], { hideDeclined: true });
+
+    expect(result).toEqual(['Standup']);
+  });
+});
+
+describe('the ids', () => {
+  /** An id holding the title would hand it to anything that reads the ids, which never needs it. */
+  test('carry the start and a fingerprint of the title, never the title', () => {
+    const agenda = mergeAgenda([], [{ source: 'feed1', events: [event('Salary Review', 1)] }], NOW);
+
+    const result = agenda[0].instanceId;
+
+    expect([result.startsWith(`${NOW + HOUR}:`), result.toLowerCase().includes('salary')]).toEqual([true, false]);
+  });
+
+  /** A title typed with other case or spaces at its ends is the same event to the duplicate check, and must keep its id. */
+  test('stay the same for a title in another case or with spaces at its ends', () => {
+    const first = mergeAgenda([], [{ source: 'feed1', events: [event('Standup', 1)] }], NOW);
+
+    const result = mergeAgenda([], [{ source: 'feed1', events: [event(' standup ', 1)] }], NOW);
+
+    expect(result[0].instanceId).toBe(first[0].instanceId);
+  });
+});
+
+describe('Hide Events Titled', () => {
+  /** The words have to reach the phone's events and the feeds' alike, or a phone's Lunch blocks still crowd out the next meeting. */
+  test("drops the phone's and the feeds' events whose titles match, and keeps the rest", () => {
+    const result = filtered([event('Team Lunch', 1), event('Dentist', 2)], [event('Canceled: Standup', 3), event('Brunch', 4)], { hideTitled: ['lunch', 'canceled:'] });
+
+    expect(result).toEqual(['Dentist', 'Brunch']);
+  });
+
+  /** A filter after the cut leaves the agenda short by every event it hides. */
+  test('fills the cap from what is left after it', () => {
+    const lunches = Array.from({ length: 5 }, (_, index) => event(`Lunch ${index}`, index + 1));
+    const upcoming = Array.from({ length: MAX_EVENTS }, (_, index) => event(`Event ${index}`, index + 10));
+
+    const result = filtered([], [...lunches, ...upcoming], { hideTitled: ['lunch'] });
+
+    expect([result.length, result[0]]).toEqual([MAX_EVENTS, 'Event 0']);
   });
 });

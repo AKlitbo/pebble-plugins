@@ -13,16 +13,25 @@
  * So is the answer's expiry, with the filters it hangs on. The answer has to run out when the next
  * event in it ends or Hide Events in Progress takes it off, or a reader that honours the expiry keeps
  * a meeting that has gone for the rest of the five minutes. Settings saved before the filters existed
- * must serve the same agenda as before.
+ * must serve the same agenda as before. The same holds for the switches that hide a feed's declined,
+ * tentative, and free events, and for Time Labels, which must keep the built-in's text until the
+ * wearer picks Short Labels.
+ *
+ * The phone's last good read has to serve through a slow read and go when Show Phone Calendars does.
+ * No answer may outlast the phone's next midnight. A phone calendar switched off has to stay off
+ * the agenda without taking a feed's copy of the same event with it.
+ *
+ * A Public Holidays feed has to fetch its country's link, never the secret link saved beside it, and
+ * a feed saved without a Source has to keep fetching its iCal link.
  *
  * The usual now is Wednesday 4 November 2026 at 12:00 in Toronto.
  */
 
 import { describe, test, expect } from 'vitest';
-import type { PluginPebble, SourceResponder } from '../../paf/ts/plugin-app/runtime';
+import type { PluginPebble, SourceRequest, SourceResponder } from '../../paf/ts/plugin-app/runtime';
 import { SETTINGS_KEY } from '../../paf/ts/plugin-app/settings';
 import type { SourceEnvelope, SourceInstance } from '../../paf/ts/plugin-sources/types';
-import { ANSWER_MS, handleSource } from './serve';
+import { ANSWER_MS, agendaLimit, handleSource } from './serve';
 
 // Wednesday 4 November 2026, 12:00 in Toronto
 const NOW_MS = Date.UTC(2026, 10, 4, 17);
@@ -48,18 +57,26 @@ const PHONE_UPDATE: SourceEnvelope = {
 /** A feed of one meeting, Thursday 5 November 2026 at 15:00 UTC. */
 const FEED = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'UID:standup@example.com', 'DTSTART:20261105T150000Z', 'DTEND:20261105T153000Z', 'SUMMARY:Standup', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
 
-/** A feed of these events, each a title, its start and end as iCal writes them in UTC or as dates for an all-day one, and any rule. */
-function feedOf(...events: Array<{ title: string; start: string; end: string; rule?: string; allDay?: boolean }>): string {
-  const lines = events.flatMap(({ title, start, end, rule, allDay }) => {
+/** A feed of these events, each a title, its start and end as iCal writes them in UTC or as dates for an all-day one, any rule, and any more lines. */
+function feedOf(...events: Array<{ title: string; start: string; end: string; rule?: string; allDay?: boolean; more?: string[] }>): string {
+  const lines = events.flatMap(({ title, start, end, rule, allDay, more = [] }) => {
     const shape = allDay ? ';VALUE=DATE' : '';
 
-    return ['BEGIN:VEVENT', `UID:${title}@example.com`, `DTSTART${shape}:${start}`, `DTEND${shape}:${end}`, ...(rule ? [`RRULE:${rule}`] : []), `SUMMARY:${title}`, 'END:VEVENT'];
+    return ['BEGIN:VEVENT', `UID:${title}@example.com`, `DTSTART${shape}:${start}`, `DTEND${shape}:${end}`, ...(rule ? [`RRULE:${rule}`] : []), `SUMMARY:${title}`, ...more, 'END:VEVENT'];
   });
 
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', ...lines, 'END:VCALENDAR'].join('\r\n');
 }
 
-/** A phone whose plain storage starts with these saved settings, kept across runs. */
+/** A moment as iCal writes it in UTC, such as 20261105T150000Z. */
+function icalTime(ms: number): string {
+  return `${new Date(ms).toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`;
+}
+
+/**
+ * A phone whose plain storage starts with these saved settings, kept across runs. The built-in
+ * calendar answers `PHONE_UPDATE` and the Preferences plugin refuses, until a spec sets either answer.
+ */
 function phoneWith(saved: Record<string, unknown>) {
   const items = new Map<string, string>([[SETTINGS_KEY, JSON.stringify(saved)]]);
 
@@ -67,16 +84,36 @@ function phoneWith(saved: Record<string, unknown>) {
     storage: { getItem: (key: string) => items.get(key) ?? null, setItem: (key: string, value: string) => void items.set(key, value), removeItem: (key: string) => void items.delete(key) },
     fetched: [] as string[],
     subscribed: 0,
+    calendar: PHONE_UPDATE as SourceEnvelope | Error,
+    preferences: Object.assign(new Error('PERMISSION_DENIED'), { code: 'PERMISSION_DENIED' }) as SourceEnvelope | Error,
+    preferencesRead: 0,
   };
 }
 
+/** The answer a fake source gives, or its refusal. */
+async function answerOf(answer: SourceEnvelope | Error): Promise<SourceEnvelope> {
+  if (answer instanceof Error) {
+    throw answer;
+  }
+
+  return answer;
+}
+
 /** Runs the source handler once at a moment, with these secrets or a keystore that cannot be read, and gives back its answer. */
-async function run(phone: ReturnType<typeof phoneWith>, secrets: Record<string, string> | 'locked', nowMs = NOW_MS, feed = FEED) {
+async function run(phone: ReturnType<typeof phoneWith>, secrets: Record<string, string> | 'locked', nowMs = NOW_MS, feed = FEED, request: Record<string, unknown> = { category: 'calendar', item: 'event' }) {
   let handler: ((request: unknown, respond: SourceResponder) => void | Promise<void>) | null = null;
   const pebble = {
     registerSourceHandler: (registered: typeof handler) => void (handler = registered),
     subscribeSource: () => void phone.subscribed++,
-    readSource: async () => PHONE_UPDATE,
+    readSource: (asked: SourceRequest) => {
+      if (asked.category === 'preferences') {
+        phone.preferencesRead++;
+
+        return answerOf(phone.preferences);
+      }
+
+      return answerOf(phone.calendar);
+    },
     secureStorage: {
       getItem: async (key: string) => {
         if (secrets === 'locked') {
@@ -90,7 +127,7 @@ async function run(phone: ReturnType<typeof phoneWith>, secrets: Record<string, 
   const answers: Array<{ validUntilMs?: number; instances: SourceInstance[] } | string> = [];
 
   handleSource({ pebble, storage: phone.storage, fetchLink: async (url) => (phone.fetched.push(url), feed) }, () => nowMs);
-  await handler!({ category: 'calendar', item: 'event' }, { data: (envelope) => void answers.push(envelope), error: (code) => void answers.push(code) });
+  await handler!(request, { data: (envelope) => void answers.push(envelope), error: (code) => void answers.push(code) });
 
   return answers;
 }
@@ -155,8 +192,9 @@ describe('the Look Ahead', () => {
     const feed = feedOf({ title: 'Late Call', start: '20261105T043000Z', end: '20261105T045000Z' }, { title: 'Breakfast', start: '20261105T053000Z', end: '20261105T063000Z' });
 
     const answers = await run(phone, TEAM_LINK, NOW_MS, feed);
+    const result = shown(answers);
 
-    expect(shown(answers)).toEqual(['Late Call (Team)']);
+    expect(result).toEqual(['Late Call (Team)']);
   });
 
   /** A walk that stops at the week leaves a weekly meeting off the second week the wearer asked for. */
@@ -176,8 +214,9 @@ describe('the Look Ahead', () => {
     const feed = feedOf({ title: 'Last Day', start: '20261205T010000Z', end: '20261205T020000Z' }, { title: 'Past It', start: '20261205T140000Z', end: '20261205T150000Z' });
 
     const answers = await run(phone, TEAM_LINK, NOW_MS, feed);
+    const result = shown(answers);
 
-    expect(shown(answers)).toEqual(['Last Day (Team)']);
+    expect(result).toEqual(['Last Day (Team)']);
   });
 
   /** A free day under Today has to read as nothing on, not as tomorrow's first meeting. */
@@ -211,8 +250,9 @@ describe('the filters', () => {
     const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', HIDE_STARTED: '15' });
 
     const answers = await run(phone, TEAM_LINK, NOW_MS + 2 * MINUTE_MS, DAY);
+    const result = shown(answers);
 
-    expect(shown(answers)).toEqual(['Standup (Team)']);
+    expect(result).toEqual(['Standup (Team)']);
   });
 
   /** A meeting that ends before its cutoff is gone at its end, and an answer kept to the cutoff would show it for eight more minutes. */
@@ -251,8 +291,9 @@ describe('the filters', () => {
     const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', ALL_DAY_EVENTS: false });
 
     const answers = await run(phone, TEAM_LINK, NOW_MS, WITH_ALL_DAY);
+    const result = shown(answers);
 
-    expect(shown(answers)).toEqual(['Standup (Team)']);
+    expect(result).toEqual(['Standup (Team)']);
   });
 
   /** A wearer updating from 1.1.0 has no filters saved, and must see the same agenda for the same five minutes. */
@@ -263,5 +304,370 @@ describe('the filters', () => {
     const answers = await run(phone, TEAM_LINK, NOW_MS, feed);
 
     expect([shown(answers), lasts(answers)]).toEqual([['Out of Office (Team)', 'Planning (Team)'], ANSWER_MS]);
+  });
+});
+
+describe('agendaLimit', () => {
+  /** A reader that asks for a number inside the range has to get that many, or a busy week still stops short. */
+  test.each([
+    [1, 1],
+    [50, 50],
+    [200, 200],
+    [7.9, 7],
+  ])('reads a limit of %s as %s', (limit, events) => {
+    const result = agendaLimit(limit);
+
+    expect(result).toBe(events);
+  });
+
+  /** A number past either end would serve an empty agenda or more than the Pebble app takes in one answer. */
+  test.each([
+    [0, 1],
+    [-5, 1],
+    [201, 200],
+    [10000, 200],
+  ])('holds a limit of %s to %s', (limit, events) => {
+    const result = agendaLimit(limit);
+
+    expect(result).toBe(events);
+  });
+
+  /** A reader that names no number has to keep the 20 events it always had. */
+  test.each([undefined, null, '30', NaN, Infinity])('reads a limit of %s as 20', (limit) => {
+    const result = agendaLimit(limit);
+
+    expect(result).toBe(20);
+  });
+});
+
+describe('the limit', () => {
+  // 25 half-hour meetings an hour apart from 13:00 on Thursday 5 November in Toronto
+  const BUSY = feedOf(...Array.from({ length: 25 }, (_, index) => ({ title: `Meeting ${index + 1}`, start: icalTime(Date.UTC(2026, 10, 5, 18) + index * HOUR_MS), end: icalTime(Date.UTC(2026, 10, 5, 18, 30) + index * HOUR_MS) })));
+
+  /** A face that asks for more than 20 has to get them, or a busy week still stops at 20. */
+  test('serves as many events as the reader asks for', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, BUSY, { category: 'calendar', item: 'event', limit: 22 });
+    const result = shown(answers).length;
+
+    expect(result).toBe(22);
+  });
+
+  /** A face that asks for no number has to keep the 20 it always had. */
+  test('serves 20 events to a reader that names no number', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, BUSY);
+    const result = shown(answers).length;
+
+    expect(result).toBe(20);
+  });
+
+  /** A feed read for the iCal reader's own 64 would stop a busy feed short of what a face asked for. */
+  test('serves more than 64 events from one feed to a reader that asks for them', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team' });
+    // 80 half-hour meetings an hour apart from 13:00 on Thursday 5 November in Toronto
+    const feed = feedOf(...Array.from({ length: 80 }, (_, index) => ({ title: `Meeting ${index + 1}`, start: icalTime(Date.UTC(2026, 10, 5, 18) + index * HOUR_MS), end: icalTime(Date.UTC(2026, 10, 5, 18, 30) + index * HOUR_MS) })));
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, feed, { category: 'calendar', item: 'event', limit: 100 });
+    const result = shown(answers).length;
+
+    expect(result).toBe(80);
+  });
+});
+
+describe('the notes', () => {
+  /** A feed event's notes have to reach a face the way the built-in sends a phone event's. */
+  test("serves a feed event's notes", async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team' });
+    const feed = FEED.replace('SUMMARY:Standup', 'SUMMARY:Standup\r\nDESCRIPTION:Dial in from the car');
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, feed);
+
+    expect((answers[0] as { instances: SourceInstance[] }).instances[0].properties?.description).toEqual({ longText: { text: 'Dial in from the car' } });
+  });
+});
+
+describe('the marks', () => {
+  // Thursday's standup, an offsite me@example.com declined, a tentative lunch, and a free hold
+  const MARKED = feedOf(
+    { title: 'Standup', start: '20261105T150000Z', end: '20261105T153000Z' },
+    { title: 'Offsite', start: '20261105T160000Z', end: '20261105T170000Z', more: ['ATTENDEE;PARTSTAT=DECLINED:mailto:me@example.com'] },
+    { title: 'Lunch', start: '20261105T170000Z', end: '20261105T180000Z', more: ['STATUS:TENTATIVE'] },
+    { title: 'Hold', start: '20261105T190000Z', end: '20261105T200000Z', more: ['TRANSP:TRANSPARENT'] }
+  );
+
+  /** The switches and the addresses have to reach the agenda from the saved settings, or the wearer's declined meetings stay. */
+  test('hides the declined, tentative, and free events with their switches on', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', HIDE_DECLINED: true, EMAIL_ADDRESSES: 'me@example.com', HIDE_TENTATIVE: true, HIDE_FREE: true });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, MARKED);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Standup (Team)']);
+  });
+
+  /** A wearer updating from 1.2.0 has none of the switches saved, and must see every event they saw before. */
+  test('serves every event from settings saved without the switches', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', EMAIL_ADDRESSES: 'me@example.com' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, MARKED);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Standup (Team)', 'Offsite (Team)', 'Lunch (Team)', 'Hold (Team)']);
+  });
+});
+
+describe('Time Labels', () => {
+  // 10:00 on Wednesday 4 November in Toronto, two hours before now, still running, and Thursday's standup at 10:00
+  const TWO = feedOf({ title: 'Review', start: '20261104T150000Z', end: '20261104T180000Z' }, { title: 'Standup', start: '20261105T150000Z', end: '20261105T153000Z' });
+
+  /** The labels a face reads as text for each served start, its short one and its long one. */
+  function labels(answers: Awaited<ReturnType<typeof run>>): string[][] {
+    const answer = answers[0] as { instances: SourceInstance[] };
+
+    return answer.instances.map((instance) => [String(instance.properties?.starts_at?.shortText?.text), String(instance.properties?.starts_at?.longText?.text)]);
+  }
+
+  /** A wearer switching from the built-in must see the same text until they pick otherwise, with no extra read on each run. */
+  test("serves the built-in's HH:MM from settings saved without Time Labels", async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, TWO);
+
+    expect([labels(answers), phone.preferencesRead]).toEqual([
+      [
+        ['10:00', '10:00'],
+        ['10:00', '10:00'],
+      ],
+      0,
+    ]);
+  });
+
+  /** Short Labels have to follow the wearer's own clock and name tomorrow, or a 12-hour wearer reads 14:30 for every day. */
+  test("serves Short Labels on the wearer's 12-hour clock", async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', TIME_LABELS: 'short' });
+
+    phone.preferences = { instances: [{ instanceId: 'units', properties: { clock: { shortText: { text: '12h' } }, locale: { shortText: { text: 'en-US' } } } }] };
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, TWO);
+
+    expect(labels(answers)).toEqual([
+      ['10:00a', '10:00a'],
+      ['Thu', 'Thu 10:00a'],
+    ]);
+  });
+
+  /** A refused read of the wearer's preferences must still serve the agenda, on the 24-hour clock in English. */
+  test('serves Short Labels in English on the 24-hour clock when the preferences cannot be read', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team', TIME_LABELS: 'short' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, TWO);
+
+    expect(labels(answers)).toEqual([
+      ['10:00', '10:00'],
+      ['Thu', 'Thu 10:00'],
+    ]);
+  });
+});
+
+describe("the phone's last good read", () => {
+  const TIMEOUT = Object.assign(new Error('TIMEOUT'), { code: 'TIMEOUT' });
+
+  /** One slow read of the phone would empty the phone's part of the agenda on every face until the next run. */
+  test('serves the last good read when a read times out', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true });
+
+    await run(phone, {});
+
+    phone.calendar = TIMEOUT;
+
+    const answers = await run(phone, {}, NOW_MS + 5 * 60 * 1000);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Dentist (Work)']);
+  });
+
+  /** A read kept through Show Phone Calendars going off would bring old events back the moment it goes on again. */
+  test('drops the last good read when Show Phone Calendars goes off', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true });
+
+    await run(phone, {});
+    phone.storage.setItem(SETTINGS_KEY, JSON.stringify({ PHONE_CALENDARS: false }));
+    await run(phone, {});
+    phone.storage.setItem(SETTINGS_KEY, JSON.stringify({ PHONE_CALENDARS: true }));
+    phone.calendar = TIMEOUT;
+
+    const answers = await run(phone, {});
+    const result = shown(answers);
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe('midnight', () => {
+  /** The window gains a day at midnight and tomorrow's labels turn into today's, so an answer that outlasts it shows yesterday's agenda. */
+  test('runs the answer out at the phone\'s next midnight', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false });
+    // 23:58 on Wednesday 4 November in Toronto
+    const lateMs = Date.UTC(2026, 10, 5, 4, 58);
+
+    const answers = await run(phone, {}, lateMs);
+    const result = (answers[0] as { validUntilMs: number }).validUntilMs;
+
+    expect(result).toBe(Date.UTC(2026, 10, 5, 5));
+  });
+});
+
+describe('Hide Events Titled from the settings', () => {
+  // Thursday's team lunch and standup
+  const LUNCH = feedOf({ title: 'Team Lunch', start: '20261105T170000Z', end: '20261105T180000Z' }, { title: 'Standup', start: '20261105T150000Z', end: '20261105T153000Z' });
+
+  /** The box has to reach the agenda from the saved settings as a comma list, for the phone's events and a feed's. */
+  test('hides the events whose titles match the saved words', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true, FEED1_ON: true, FEED1_NAME: 'Team', HIDE_TITLED: 'dentist, Lunch' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, LUNCH);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Standup (Team)']);
+  });
+
+  /** A wearer updating with no words saved must keep every event. */
+  test('serves every event from settings saved without the box', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true, FEED1_ON: true, FEED1_NAME: 'Team' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, LUNCH);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Dentist (Work)', 'Standup (Team)', 'Team Lunch (Team)']);
+  });
+});
+
+describe('the phone calendars switched off', () => {
+  // the dentist appointment the Work calendar holds, as a feed holds it too
+  const DENTIST = feedOf({ title: 'Dentist', start: '20261105T140000Z', end: '20261105T150000Z' });
+
+  /** A calendar switched off on the page has to keep its events off the watch. */
+  test("keeps a switched off calendar's events off the agenda", async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true, HIDDEN_CALENDARS: JSON.stringify(['Work']) });
+
+    const answers = await run(phone, {});
+    const result = shown(answers);
+
+    expect(result).toEqual([]);
+  });
+
+  /** A feed the wearer turned on is its own choice, so a phone calendar switched off must not take its copy of an event too. */
+  test('still serves a feed that holds the same event', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true, HIDDEN_CALENDARS: JSON.stringify(['Work']), FEED1_ON: true, FEED1_NAME: 'Team' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, DENTIST);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Dentist (Team)']);
+  });
+
+  /** A wearer updating with nothing saved must keep every phone calendar. */
+  test('serves every phone calendar from settings saved without the list', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true });
+
+    const answers = await run(phone, {});
+    const result = shown(answers);
+
+    expect(result).toEqual(['Dentist (Work)']);
+  });
+});
+
+describe('Public Holidays', () => {
+  // a holiday all day on Monday 9 November 2026, inside the week
+  const HOLIDAYS = feedOf({ title: 'Civic Holiday', start: '20261109', end: '20261110', allDay: true });
+
+  /** A holiday feed has to fetch its country's link, never the iCal link saved beside it, which may be private. */
+  test("fetches the country's public holidays and names the feed after them", async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_SOURCE: 'holidays', FEED1_COUNTRY: 'ca' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, HOLIDAYS);
+    const result = [shown(answers), phone.fetched.map((url) => url.split('?')[0])];
+
+    expect(result).toEqual([['Civic Holiday (Canada Holidays)'], ['https://calendar.google.com/calendar/ical/en.canadian.official%23holiday%40group.v.calendar.google.com/public/basic.ics']]);
+  });
+
+  /** A name the wearer typed is theirs, and must not be swapped for the country's. */
+  test('keeps a name the wearer gave the feed', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_SOURCE: 'holidays', FEED1_COUNTRY: 'ca', FEED1_NAME: 'Days Off' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, HOLIDAYS);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Civic Holiday (Days Off)']);
+  });
+
+  /** Include Observances has to reach the fetch, or the switch changes nothing. */
+  test('fetches the calendar with the observances when they are included', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_SOURCE: 'holidays', FEED1_COUNTRY: 'ca', FEED1_OBSERVANCES: true });
+
+    await run(phone, TEAM_LINK, NOW_MS, HOLIDAYS);
+
+    const result = phone.fetched.map((url) => url.split('?')[0]);
+
+    expect(result).toEqual(['https://calendar.google.com/calendar/ical/en.canadian%23holiday%40group.v.calendar.google.com/public/basic.ics']);
+  });
+
+  /** A holiday link is not secret, so a locked keystore must not stop it being fetched. */
+  test('fetches a holiday feed while the encrypted storage cannot be read', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_SOURCE: 'holidays', FEED1_COUNTRY: 'ca' });
+
+    const answers = await run(phone, 'locked', NOW_MS, HOLIDAYS);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Civic Holiday (Canada Holidays)']);
+  });
+
+  /** A wearer updating has no Source saved, and their feed must keep fetching its iCal link. */
+  test('fetches the iCal link from settings saved without a Source', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_NAME: 'Team' });
+
+    await run(phone, TEAM_LINK, NOW_MS, HOLIDAYS);
+
+    const result = phone.fetched.map((url) => url.split('?')[0]);
+
+    expect(result).toEqual(['https://example.com/team.ics']);
+  });
+});
+
+describe('Public Holidays naming and the calendar switches', () => {
+  // a holiday all day on Monday 9 November 2026, inside the week
+  const HOLIDAYS = feedOf({ title: 'Civic Holiday', start: '20261109', end: '20261110', allDay: true });
+
+  /** A name filled in for one country left saved after the country changed would put Canada's holidays under US Holidays. */
+  test('serves a filled in name as the country now picked', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED1_ON: true, FEED1_SOURCE: 'holidays', FEED1_COUNTRY: 'ca', FEED1_NAME: 'US Holidays' });
+
+    const answers = await run(phone, TEAM_LINK, NOW_MS, HOLIDAYS);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Civic Holiday (Canada Holidays)']);
+  });
+
+  /** The second feed has its own keys, and a holiday feed there must be named and fetched the same way, with observances off by default. */
+  test("names and fetches feed 2's holidays, without observances by default", async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: false, FEED2_ON: true, FEED2_SOURCE: 'holidays', FEED2_COUNTRY: 'jp' });
+
+    const answers = await run(phone, {}, NOW_MS, HOLIDAYS);
+    const result = [shown(answers), phone.fetched.map((url) => url.split('?')[0])];
+
+    expect(result).toEqual([['Civic Holiday (Japan Holidays)'], ['https://calendar.google.com/calendar/ical/en.japanese.official%23holiday%40group.v.calendar.google.com/public/basic.ics']]);
+  });
+
+  /** The switches list the phone's calendars, so a feed the wearer named the same must not go with them. */
+  test('leaves a feed alone that has the same name as a phone calendar switched off', async () => {
+    const phone = phoneWith({ PHONE_CALENDARS: true, HIDDEN_CALENDARS: JSON.stringify(['Team']), FEED1_ON: true, FEED1_NAME: 'Team' });
+
+    const answers = await run(phone, TEAM_LINK);
+    const result = shown(answers);
+
+    expect(result).toEqual(['Dentist (Work)', 'Standup (Team)']);
   });
 });

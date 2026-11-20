@@ -6,11 +6,12 @@ Every watchface that reads calendar plugins reads it the way it reads the Pebble
 
 ## Features
 
-- The calendars the Pebble app's built-in Calendar plugin already reads.
-- Up to two more calendars from an iCal link, such as a Google Calendar, a team schedule, or a sports fixture list.
-- One agenda, soonest first, with each event shown once.
+- The calendars the Pebble app's built-in Calendar plugin already reads, each of which you can keep off your watchfaces.
+- Up to two more calendars from an iCal link, such as a Google Calendar, a team schedule, or a sports fixture list, or from a country's public holidays in one pick.
+- One agenda, soonest first, with each event shown once and its notes carried as the built-in carries them.
 - A Look Ahead you set, from today only to a month.
-- Filters to hide meetings already underway and to leave out all-day events.
+- Time labels that can follow your 12 or 24 hour clock and name the day, for watchfaces that show them.
+- Filters to hide meetings already underway, to leave out all-day events, to leave out the iCal events you declined, marked tentative, or marked free, and to leave out events by words in their titles.
 - An iCal Refresh Interval you set, for how old a feed's copy can get.
 - Your private iCal links kept in the phone's encrypted storage.
 
@@ -27,12 +28,17 @@ Open Calendar Enhanced + iCal's settings in the Pebble app.
 
 | Setting | What It Does |
 | :-- | :-- |
-| Show Phone Calendars | Merges in the phone's calendars, on by default. Which calendars show is picked in the built-in Calendar plugin's settings in the Pebble app, not here. |
-| iCal Feed 1 and iCal Feed 2 | Each has a switch, a name, and an iCal link. The name shows as the calendar each of the feed's events came from. A `webcal://` link works, and is fetched as `https://`. |
+| Show Phone Calendars | Merges in the phone's calendars, on by default. Under it, each of your phone's calendars has a switch, all on by default. A calendar switched off stays off your watchfaces. One switched off with no events this week still shows, marked as having none, so you can turn it back on, and it stays off until you do. The list shows the calendars with events in the next 7 days, since that's all the Pebble app shares. The Pebble app's own calendar switches still decide which calendars it reads and pins to the timeline, so a calendar switched off there never reaches this list. |
+| iCal Feed 1 and iCal Feed 2 | Each has a switch, a Source, a name, and an iCal link. Source is iCal Link by default. Public Holidays swaps the link for a Country, from 38 countries, and the feed takes the country's holiday name, such as US Holidays, unless you've named it. Include Observances, off by default, adds days such as Valentine's Day that aren't days off. The name shows as the calendar each of the feed's events came from. A `webcal://` link works, and is fetched as `https://`. Under the link, the page shows when the feed was last fetched, how many events it gave, and its last error since then. |
 | iCal Refresh Interval | The most a feed's copy can age before the next run fetches it again, from 5 minutes to 1 hour, 30 minutes by default. It is a ceiling rather than a schedule, since the Pebble app decides when the plugin runs. |
 | Look Ahead | Sets how far ahead the calendar goes, from today only to a month, 1 week by default. Your iCal feeds follow it in full, though a watchface that only shows a week still shows a week. Events from your phone's calendars come through the Pebble app, which only shares the next seven days, so they stop at a week whatever you pick. If you'd like that longer, it's one for Eric at Pebble. |
 | Hide Events in Progress | Takes a meeting off the agenda once it has been going a while, so a face shows what comes next. Never by default, or When They Start, 15 Minutes After, 30 Minutes After, or 60 Minutes After. All-day events, and anything that runs a day or more, stay until they end. |
 | Show All-Day Events | Keeps all-day events on the agenda, on by default. Turn it off when all-day reminders and statuses crowd out your next meeting. |
+| Hide Declined Events | Leaves out an iCal event you declined, off by default. It finds your answer among the guests by Your Email Addresses, which shows while it is on and takes a list separated by commas. |
+| Hide Tentative Events | Leaves out an iCal event marked tentative, off by default. |
+| Hide Free Events | Leaves out a timed iCal event that shows you as free, off by default. All-day events stay, since holiday calendars mark every holiday as free. |
+| Hide Events Titled | Leaves out an event from any calendar whose title has one of the words you list, separated by commas, such as `Lunch, Focus Time, Canceled:`. Empty by default. A word matches from the start of a word in the title, whatever its case, so `Lunch` hides Team Lunch but not Brunch. |
+| Time Labels | How an event's start and end read on a watchface that shows them as text. Match the Pebble App, the default, reads `14:30` whatever the day, as the built-in does. Short Labels follow the 12 or 24 hour clock picked in the Pebble app, as `2:30p`, and name the day for an event that isn't today, such as `Thu` within the week or `Nov 27` after it, in your watch's language where its names fit, and in English where they don't. |
 
 > [!WARNING]
 > A private iCal link lets anyone who has it read that calendar. Treat it like a password, and don't share or post it. Calendar Enhanced + iCal keeps it in the phone's encrypted storage, which only the plugin can read.
@@ -58,21 +64,22 @@ Calendar Enhanced + iCal serves `calendar/event`, one instance per event, in the
 | :-- | :-- |
 | `name` | The event's title. |
 | `location` | Where it is, when it has a place. |
-| `starts_at` | When it starts, with its time on the phone's clock as a label. |
+| `description` | The event's notes as plain text, up to 300 characters, when it has any. |
+| `starts_at` | When it starts, with a label as Time Labels sets it, its time on the phone's clock or its day. |
 | `ends_at` | When it ends, with a label as well. |
 | `all_day` | Whether it lasts all day. |
 | `calendar` | The calendar or feed it came from. |
 
-Each event goes out under an id made from its start and title, so a face sees the same event from one run to the next. An all-day event goes out from UTC midnight to UTC midnight, as the built-in sends one on Android.
+Each event goes out under an id made from its start and a fingerprint of its title, so a face sees the same event from one run to the next. An all-day event goes out from UTC midnight to UTC midnight, as the built-in sends one on Android.
 
 ## How It Works
 
 The plugin has no timers. The Pebble app runs it about every five minutes while a face is subscribed, and again when the phone's calendars change. Each run reads the phone and both feeds side by side, merges them, and answers.
 
-* **The Phone's Calendars** are read from the built-in Calendar plugin by its uuid, which reaches it even while Calendar Enhanced + iCal is the preferred source. A read the Pebble app refuses, such as one without the Calendar permission, leaves the feeds serving on their own.
-* **Each Feed** keeps its last good copy in `localStorage`, with a fingerprint of its link rather than the link. A run fetches the feed again once the copy reaches the iCal Refresh Interval, once the phone's midnight has passed since the fetch, or once the Look Ahead changes. A fetch that fails, or brings back something that is not iCal, keeps the copy and is tried again on the next run. Turning a feed off, or changing or clearing its link, drops the copy.
-* **The Agenda** runs from today to the end of the Look Ahead's last day on the phone's clock, soonest first, at most 20 events. An event on the phone and in a feed shows once, as the phone's copy, when the two have the same title, the same start, and the same all-day flag. An event both feeds carry shows once when it has the same UID and start in each.
-* **The Filters** come before the 20-event cap, so a hidden event makes room for the next one. The answer is marked good only until the next event in it ends or Hide Events in Progress takes it off, when that comes before the usual five minutes.
+* **The Phone's Calendars** are read from the built-in Calendar plugin by its uuid, which reaches it even while Calendar Enhanced + iCal is the preferred source. The plugin asks it for 200 events with their notes, the most the Pebble app gives, and keeps the last good read in `localStorage`. A read that fails, such as one that times out, serves that kept read in its place for up to three hours. A read the wearer refused, such as one without the Calendar permission, drops it and leaves the feeds serving on their own. Turning Show Phone Calendars off drops it too. A slow read that finishes after a newer run never replaces that run's read, or brings back one refused since.
+* **Each Feed** keeps its last good copy in `localStorage`, with a fingerprint of its link rather than the link. A run fetches the feed again once the copy reaches the iCal Refresh Interval, once the phone's midnight has passed since the fetch, or once the Look Ahead or Your Email Addresses change. A fetch that fails, or brings back something that is not iCal, keeps the copy and is tried again on the next run. A Public Holidays feed builds its link from the country each run, so the link is never saved, and it isn't secret. Turning a feed off, or changing or clearing its link, drops the copy. Beside the copy each feed keeps a status for the settings page, the time of its last good fetch, its count of events, and the kind of its last failure, such as `HTTP 404`, a timeout, or a site the Pebble app hasn't allowed, but never the link or the error's own text.
+* **The Agenda** runs from today to the end of the Look Ahead's last day on the phone's clock, soonest first. It holds as many events as the face asks for, up to 200, and 20 for a face that names no number. An event on the phone and in a feed shows once, as the phone's copy, when the two have the same title, the same start, and the same all-day flag. An event both feeds carry shows once when it has the same UID and start in each.
+* **The Filters** come before the cap, so a hidden event makes room for the next one. The answer is marked good only until the next event in it ends or Hide Events in Progress takes it off, when that comes before the usual five minutes.
 
 The iCal links go to `Pebble.secureStorage`, which the phone encrypts and only the plugin can read. The other settings go to `localStorage`.
 
@@ -80,18 +87,23 @@ The iCal links go to `Pebble.secureStorage`, which the phone encrypts and only t
 
 **Event Availability**
 
-* Phone events stop at 10, and at 7 days ahead, since that is all the built-in plugin serves.
-* The agenda holds at most 20 events across the phone and both feeds.
+* Phone events stop at 7 days ahead, and at 200 events, since that is all the built-in plugin serves.
+* The agenda holds 20 events across the phone and both feeds, unless a face asks for more, up to 200. Each feed gives at most 200.
 * Every face reading Calendar Enhanced + iCal gets the same agenda.
+* Two phone calendars with the same name share one switch, since the built-in sends only a calendar's name.
 
 **Event Status**
 
-* A cancelled event on an iPhone, and a declined event on either phone, still show from the phone's calendars, since the built-in sends no status. From a feed they are left out.
+* A cancelled event on an iPhone still shows from the phone's calendars, and Hide Declined, Tentative, and Free Events only reach your iCal feeds, since the built-in sends no status or availability. A phone event one of your feeds also holds takes that feed's marks. A cancelled event from a feed is always left out.
 
 **All-Day Events**
 
 * West of UTC, today's all-day events from the phone drop out of the agenda in the evening, since the built-in ends them at UTC midnight.
 * On a phone at UTC+13 or further east, such as New Zealand in summer, an all-day event reads a day late. The built-in's own all-day events do the same there, and matching the built-in keeps every face reading the two the same way.
+
+**Public Holidays**
+
+* The holiday calendars come from Google's public holiday calendars. Google doesn't document their address, so it could change without notice.
 
 **Duplicates**
 
@@ -100,6 +112,7 @@ The iCal links go to `Pebble.secureStorage`, which the phone encrypts and only t
 **Refreshing**
 
 * The runtime has no timers, so a feed's host that never answers is only cut off where the runtime offers `AbortSignal.timeout`, after 8 seconds.
+* While every read of the phone times out, the phone's part of the agenda is the last good read, for up to three hours, so an event changed on the phone since then shows as it was. After three hours the phone's part is empty until a read comes through.
 * A meeting Hide Events in Progress takes off can stay on a face until the Pebble app next runs the plugin, up to five minutes, since the Pebble app runs it on its own schedule.
 
 ## Building

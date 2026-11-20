@@ -6,12 +6,11 @@
  */
 
 import { pluginPebble } from '../../paf/ts/plugin-app/runtime';
-import { handleSettings } from '../../paf/ts/plugin-app/settings';
-import { SETTINGS_OPTIONS } from '../settings';
 import { fetchText } from '../../paf/ts/plugin-app/request';
+import { handlePage } from './page-bridge';
 import { handleSource } from './serve';
 
 const pebble = pluginPebble();
 
-handleSettings(SETTINGS_OPTIONS, pebble, localStorage);
+handlePage(pebble, localStorage);
 handleSource({ pebble, storage: localStorage, fetchLink: fetchText });

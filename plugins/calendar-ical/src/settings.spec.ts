@@ -9,10 +9,21 @@
  *
  * A switch has to read a saved off as off, and anything else as its default. Show All-Day Events opens
  * on, so a wearer updating from 1.1.0 must keep their all-day events.
+ *
+ * Time Labels has to read anything but Short Labels as the built-in's text, so a wearer who switches
+ * plugins sees no change until they pick otherwise.
+ *
+ * A feed's Source has to read anything but Public Holidays as an iCal link, so a feed set up before
+ * keeps its link.
+ *
+ * The hidden calendars have to read anything but a saved list of names as none, so every calendar shows.
+ *
+ * The email addresses have to come apart however the wearer separates them, or an address matches no
+ * guest and Hide Declined Events hides nothing.
  */
 
 import { describe, test, expect } from 'vitest';
-import { DEFAULTS, hideStartedMinutes, lookAheadDays, switchOn } from './settings';
+import { DEFAULTS, emailAddresses, feedSourceOf, hiddenCalendars, hideStartedMinutes, lookAheadDays, switchOn, timeLabelStyle } from './settings';
 import type { SwitchKey } from './settings';
 
 describe('lookAheadDays', () => {
@@ -56,6 +67,75 @@ describe('hideStartedMinutes', () => {
     const result = hideStartedMinutes(value);
 
     expect(result).toBeNull();
+  });
+});
+
+describe('timeLabelStyle', () => {
+  /** Short Labels on the page have to reach the agenda, or picking them changes nothing. */
+  test('reads Short Labels as short', () => {
+    const result = timeLabelStyle('short');
+
+    expect(result).toBe('short');
+  });
+
+  /** A wearer who never picked anything must keep the built-in's text, whatever stray value is saved. */
+  test.each([undefined, null, '', 'builtIn', 'Short', 'junk', true])('reads %j as the built-in', (value) => {
+    const result = timeLabelStyle(value);
+
+    expect(result).toBe('builtIn');
+  });
+});
+
+describe('hiddenCalendars', () => {
+  /** The page saves the list as JSON, and a name lost in the read brings that calendar back on the watch. */
+  test('reads the saved list as its names', () => {
+    const result = hiddenCalendars(JSON.stringify(['Work', 'Family']));
+
+    expect(result).toEqual(['Work', 'Family']);
+  });
+
+  /** Settings saved before the list existed, or a value the page never saves, must read as none so every calendar shows. */
+  test.each([undefined, null, '', 'Work', '{"Work":true}', 42, JSON.stringify([1, '', null])])('reads %j as none', (value) => {
+    const result = hiddenCalendars(value);
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe('feedSourceOf', () => {
+  /** Public Holidays on the page has to reach the feed, or the feed keeps fetching its link. */
+  test('reads Public Holidays as holidays', () => {
+    const result = feedSourceOf('holidays');
+
+    expect(result).toBe('holidays');
+  });
+
+  /** A feed set up before a feed had a Source must keep fetching its iCal link. */
+  test.each([undefined, null, '', 'ical', 'Holidays', true])('reads %j as an iCal link', (value) => {
+    const result = feedSourceOf(value);
+
+    expect(result).toBe('ical');
+  });
+});
+
+describe('emailAddresses', () => {
+  /** A list split the wrong way gives an address that matches no guest, so the wearer's declined meetings stay. */
+  test.each([
+    ['me@example.com', ['me@example.com']],
+    ['me@example.com, work@example.com', ['me@example.com', 'work@example.com']],
+    ['me@example.com;work@example.com', ['me@example.com', 'work@example.com']],
+    [' me@example.com  work@example.com ,', ['me@example.com', 'work@example.com']],
+  ])('reads %j as its addresses', (value, expected) => {
+    const result = emailAddresses(value);
+
+    expect(result).toEqual(expected);
+  });
+
+  /** Settings saved before the box existed, or a value the page never saves, must read as no addresses rather than throw. */
+  test.each([undefined, null, '', ' , ', 42, true])('reads %j as none', (value) => {
+    const result = emailAddresses(value);
+
+    expect(result).toEqual([]);
   });
 });
 

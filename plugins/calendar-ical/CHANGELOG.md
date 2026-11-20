@@ -4,6 +4,25 @@ All notable changes to Calendar Enhanced + iCal are recorded here, following [Ke
 
 ## [Unreleased]
 
+### Added
+
+- Added each event's notes, which watchfaces now get from your phone's calendars and your iCal feeds alike, as they do from the built-in Calendar plugin.
+- Added Hide Declined Events, Hide Tentative Events, and Hide Free Events switches, so the next event on your watch is one you're going to. They reach your iCal feeds, and a phone event one of your feeds also holds, since the Pebble app doesn't share whether you're going to a phone event. Hide Declined Events needs your email addresses.
+- Added Public Holidays as a Source for either feed, with 38 countries to pick from. The feed takes the country's holiday name unless you've named it, and Include Observances adds days such as Valentine's Day that aren't days off.
+- Added a switch for each of your phone's calendars, so a calendar can show on your timeline without showing on your watchfaces. The list shows the calendars with events in the next 7 days, and any you've switched off.
+- Added a Hide Events Titled box, which keeps events whose titles have any of the words you list, such as Lunch, Focus Time, or Canceled:, off your watch.
+- Added a Time Labels setting for watchfaces that show an event's time as text. Short Labels read 2:30p on a 12-hour clock, and Thu or Nov 27 for an event on another day. Match the Pebble App, the default, keeps the built-in's 14:30.
+- Added a status under each iCal feed on the settings page, showing when it was last fetched, how many events it gave, and its last error, such as a timeout or a site the Pebble app hasn't allowed.
+
+### Fixed
+
+- Fixed your phone's events dropping off the watch when one read of your phone's calendars was slow. The agenda keeps the last good read for up to three hours, until the next one comes through.
+- Fixed a busy week showing only the first 10 of your phone's events. A watchface that asks for more than 20 events now gets them too.
+
+### Notes
+
+- Your iCal feeds' events gain their notes, and their declined, tentative, and free marks, at the feed's next fetch, at most one iCal Refresh Interval after the update.
+
 ## [1.2.0] - 2026-11-18
 
 ### Added
