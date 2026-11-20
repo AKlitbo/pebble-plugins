@@ -19,6 +19,7 @@
         "properties": {
           "name": ["longText", "shortText"],
           "location": ["longText", "shortText"],
+          "description": ["longText"],
           "starts_at": ["shortText", "longText", "timestamp"],
           "ends_at": ["shortText", "timestamp"],
           "all_day": ["boolean"],
