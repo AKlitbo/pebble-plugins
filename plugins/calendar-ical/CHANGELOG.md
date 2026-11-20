@@ -4,6 +4,12 @@ All notable changes to Calendar Enhanced + iCal are recorded here, following [Ke
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-20
+
+### Fixed
+
+- Fixed Hide Events Titled looking like it only worked on iCal links. It now sits with the filters that reach every calendar, and the switches that only reach your iCal links have a heading of their own.
+
 ## [1.3.0] - 2026-11-20
 
 ### Added
