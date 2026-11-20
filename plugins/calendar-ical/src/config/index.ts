@@ -6,6 +6,7 @@
 
 import type { ClayConfigItem } from '../../paf/ts/clay/types';
 import { CALLOUT_BADGE, CALLOUT_BOX } from '../../paf/ts/clay/callout-style';
+import { subheading } from '../../paf/ts/pkjs/config-rows';
 import { combineCustomFns } from '../../paf/ts/clay/custom-fn';
 import hiddenStore from '../../paf/ts/clay/hidden-store-component';
 import { HOLIDAY_CALENDARS, automaticNames } from '../holidays';
@@ -183,8 +184,17 @@ export const clayConfig: ClayConfigItem[] = [
         description: 'Turn off to hide birthdays, holidays, and other all-day events.',
         defaultValue: DEFAULTS.ALL_DAY_EVENTS,
       },
+      {
+        type: 'input',
+        messageKey: 'HIDE_TITLED',
+        label: 'Hide Events Titled',
+        description: 'Hides events with any of these words in the title, separated by commas, such as Lunch, Focus Time.',
+        defaultValue: DEFAULTS.HIDE_TITLED,
+        attributes: { type: 'text', autocapitalize: 'off', placeholder: 'Lunch, Focus Time' },
+      },
       // the built-in Calendar plugin reads whether the wearer is going from the phone but sends none of it
-      { type: 'text', defaultValue: "These three only work on iCal links, since the Pebble app doesn't share them for phone calendars." },
+      subheading('iCal Links Only'),
+      { type: 'text', defaultValue: "The Pebble app doesn't share these for phone calendars." },
       {
         type: 'toggle',
         messageKey: 'HIDE_DECLINED',
@@ -215,14 +225,6 @@ export const clayConfig: ClayConfigItem[] = [
         label: 'Hide Free Events',
         description: 'Hides timed events that show you as free, like holds. All-day events stay, since holiday calendars mark every holiday as free.',
         defaultValue: DEFAULTS.HIDE_FREE,
-      },
-      {
-        type: 'input',
-        messageKey: 'HIDE_TITLED',
-        label: 'Hide Events Titled',
-        description: 'Hides events with any of these words in the title, separated by commas, such as Lunch, Focus Time.',
-        defaultValue: DEFAULTS.HIDE_TITLED,
-        attributes: { type: 'text', autocapitalize: 'off', placeholder: 'Lunch, Focus Time' },
       },
     ],
   },
