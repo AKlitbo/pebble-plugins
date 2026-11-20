@@ -4,10 +4,12 @@ All notable changes to Calendar Enhanced + iCal are recorded here, following [Ke
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-20
+
 ### Added
 
 - Added each event's notes, which watchfaces now get from your phone's calendars and your iCal feeds alike, as they do from the built-in Calendar plugin.
-- Added Hide Declined Events, Hide Tentative Events, and Hide Free Events switches, so the next event on your watch is one you're going to. They reach your iCal feeds, and a phone event one of your feeds also holds, since the Pebble app doesn't share whether you're going to a phone event. Hide Declined Events needs your email addresses.
+- Added Hide Declined Events, Hide Tentative Events, and Hide Free Events switches, so the next event on your watch is one you're going to. They reach your iCal feeds, and a phone event one of your feeds also holds, since the Pebble app doesn't share whether you're going to a phone event. Hide Declined Events, and Hide Tentative Events for invitations you answered Maybe to, need your email addresses.
 - Added Public Holidays as a Source for either feed, with 38 countries to pick from. The feed takes the country's holiday name unless you've named it, and Include Observances adds days such as Valentine's Day that aren't days off.
 - Added a switch for each of your phone's calendars, so a calendar can show on your timeline without showing on your watchfaces. The list shows the calendars with events in the next 7 days, and any you've switched off.
 - Added a Hide Events Titled box, which keeps events whose titles have any of the words you list, such as Lunch, Focus Time, or Canceled:, off your watch.
